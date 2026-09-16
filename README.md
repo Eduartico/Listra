@@ -1,7 +1,8 @@
-# Vinted Listing Backup
+# Listra
 
 A Chrome/Brave extension (Manifest V3) that saves your own Vinted listings — every
-field plus every photo at full resolution — into a folder on your computer.
+field plus every photo at full resolution — to your own computer, shows them in a
+Vinted-style grid, and relists any of them (sold ones included) in one click.
 
 Nothing leaves your machine. There is no server, no account, and no third party: the
 extension reads Vinted through your own already-signed-in browser session and writes
@@ -10,8 +11,12 @@ straight to disk.
 ## Install
 
 1. Clone or download this folder.
-2. Open `chrome://extensions`, turn on **Developer mode**.
+2. Open `chrome://extensions` (`brave://extensions` on Brave), turn on **Developer mode**.
 3. **Load unpacked**, and select this folder (the one containing `manifest.json`).
+
+An unpacked extension is loaded into one browser profile only. If you loaded it in
+a test profile and do not see it in your everyday browser, load it there too — same
+three steps.
 
 No build step, no `npm install`. The extension ships the files it runs.
 
@@ -22,16 +27,74 @@ placeholder icons in code on any platform.
 ## Use
 
 1. Sign in to Vinted and open your own profile (`/member/<id>-<your-username>`).
-2. Click the **Backup Listings** button at the bottom right of the page.
-   The backup manager opens in its own tab.
-3. In the manager, click **Choose backup folder** and pick where the backup should go.
-4. Click **Back up all listings**.
-   To try it first, put `2` in the "First … listings only" box.
-5. When it finishes, click **Validate backup**.
+2. Click the **Backup Listings** button at the bottom right of the page. Listra opens
+   in its own tab and, if a destination is already set, starts backing up.
+3. On Chrome, click **Choose backup folder** first and pick where the backup goes.
+   On Brave there is no folder picker (see below); the backup goes into browser
+   storage and starts right away.
+4. When it finishes, click **Validate backup**.
+
+The page follows your operating system's light or dark theme.
+
+### Where the backup is
+
+**Chrome:** in the folder you picked, as ordinary files, written as the backup runs.
+
+**Brave:** Brave disables the folder picker, so the backup is kept inside the
+browser (IndexedDB), which is not a folder you can open. Two ways out, both on the
+"Where the backup lives" panel:
+
+- **Save to Downloads folder** copies every file into `Downloads/Listra/<profile>/…`
+  with the same layout as below. Turn off "Ask where to save each file" in Brave's
+  download settings first, or it asks once per file.
+- **Export as ZIP** makes one archive of everything.
+
+### The grid
+
+Every backed-up listing is a card with its stored photos (arrows to flip through
+them), price, title, category, condition, brand, size, colour and description
+(click to expand). Badges mark **Sold**, Reserved, Hidden and Failed. Search, filter
+(All / Active / Sold / Failed / Relisted) and sort (newest, title, price, photo
+count) at the top. **Open on Vinted** goes to the live listing.
+
+### Relisting
+
+Sold listings are backed up too, and any listing can be put back on Vinted: press
+**Relist** on a card, or tick several and press **Relist selected**. For each one,
+Listra:
+
+1. backs it up again first and checks it is on disk with its photos;
+2. if the listing is still live, **deletes it** — this comes first because Vinted
+   rejects a new listing whose photos match a live one, so creating before deleting
+   gets both cancelled;
+3. uploads the stored photos and creates the new listing from the backup — title,
+   description, price, category, brand, condition, colours, package size;
+4. backs up the new listing, so it appears in the grid.
+
+Deleting first is why the backup has to be reliable: once the original is gone, the
+backup is the only source. If the create then fails, the delete is remembered — the
+card shows "Original deleted — press Relist to recreate from the backup", and Retry
+finishes the job without deleting anything again.
+
+A batch goes one listing at a time with a 20-second pause between them, because
+creating listings is what Vinted's bot protection watches most closely. If Vinted
+asks for a human check, Listra stops, shows an **Open Vinted's human check** button,
+and continues from where it stopped when you press **Retry** after completing it.
+If Vinted rate-limits, it stops the same way; wait a few minutes and retry.
+
+Sold listings' backups lack the condition, colour and package-size ids that only the
+seller's editable record carries, so those are looked up at relist time from the
+labels ("Novo com etiquetas" → id 6, "Preto" → id 1); package size is assumed
+small when unknown and the assumption is noted in the log.
 
 Progress shows in the manager tab, on the Vinted page, and in the toolbar popup. You
 can close the manager tab mid-run: reopening it and pressing Start continues from
 where it stopped rather than starting over.
+
+Clicking the **Backup Listings** button on the Vinted page again after a run has
+already finished starts a fresh full backup rather than skipping what is already
+there — there is no incremental "only fetch what changed" mode. Re-running overwrites
+each listing's folder in place, so a completed backup is always safe to redo.
 
 ## What gets written
 
@@ -177,7 +240,7 @@ src/common/      shared by all three contexts
   normalize.js       raw Vinted item -> the schema above
 src/content/     content script, DOM fallback, injected styles
 src/background/  service worker
-src/manager/     orchestrator page, both storage backends, images, validation
+src/manager/     orchestrator page, grid, relist, both storage backends, images, validation, Downloads export
 src/popup/       toolbar popup
 tools/           icon generator
 tests/           offline test harness and fixtures
@@ -235,12 +298,15 @@ left disabled until Developer mode is on — reload from `brave://extensions` in
 node tests/run.js
 ```
 
-164 assertions, no dependencies. It evaluates the shipped modules in-process and
+212 assertions, no dependencies. It evaluates the shipped modules in-process and
 covers region detection across all twelve domains, profile-URL detection, folder-name
 safety (accents, length, Windows device names, collisions), price and timestamp
 normalization, the RSC flight reader against a fixture built from a captured live
 page (including reference resolution), a captured wardrobe record, tolerance of
-renamed fields, the rate limiter's real timing, and the ZIP writer's CRC.
+renamed fields, the folder backend's overwrite behaviour against a small in-memory
+fake of the File System Access API, the relist body builder and its condition,
+colour and human-check parsers, the rate limiter's real timing, and the ZIP
+writer's CRC.
 
 Fixtures under `tests/fixtures/` that came from live captures are anonymized.
 
@@ -255,16 +321,24 @@ drive the extension's own pages. The driver for that lives in the git-ignored
 
 ## Known limits
 
-- **Verified against one storefront (vinted.pt), one real account, on Brave.** A
-  full 31-listing backup ran clean, signed in. Other storefronts share the same
-  frontend but were not exercised; the Chrome folder-picker path was not exercised
-  either (Brave has no picker). When the normalizer meets something unfamiliar it
-  logs the keys it actually received and fails that listing loudly.
+- **Verified against one storefront (vinted.pt), one real account, on Brave.**
+  Several full 31-listing backups ran clean, signed in, including resuming after
+  the manager tab was closed mid-run, cancelling mid-run, and a synthetic bad-id
+  failure that isolated correctly while the rest of the run completed — all
+  confirmed live, not just by design. Other storefronts share the same frontend
+  but were not exercised; the Chrome folder-picker path was not exercised either
+  (Brave has no picker), though its write/overwrite logic has an offline regression
+  test against a fake File System Access directory. When the normalizer meets
+  something unfamiliar it logs the keys it actually received and fails that
+  listing loudly.
 - **Shipping options and creation dates are not exposed.** The page loads shipping
   client-side and shows only a relative upload label ("há 6 semanas"), which is kept
   as `uploadedText`; `createdAt` is `null`.
-- **Backup only.** Re-listing from a backup is not implemented. It means driving
-  Vinted's upload form, which is a separate piece of work with its own failure modes.
+- **Relisting goes through the same API Vinted's own form uses, not the form.** It
+  worked for a recreated listing during development, but creating listings by API
+  is exactly what DataDome scores hardest; expect a human check now and then. Two
+  direct-API attempts in one session were challenged while the form itself was not,
+  so the batch pacing is deliberately slow and stops at the first challenge.
 - **Own-profile detection can be inconclusive.** If the extension cannot confirm the
   profile is yours, it says so and asks before proceeding rather than guessing.
 - **Titles are flattened to ASCII for folder names**, per the spec's sanitization

@@ -67,9 +67,22 @@
     return m ? decodeURIComponent(m[1]) : null;
   }
 
-  function getPageConfig() {
-    if (pageConfig) return pageConfig;
+  async function getPageConfig() {
+    if (pageConfig && pageConfig.csrfToken) return pageConfig;
     const cfg = VB.pageData.getPageConfig(VB.pageData.getFlightPayload());
+    if (!cfg.csrfToken) {
+      // After a client-side navigation the flight scripts are no longer in the
+      // DOM. A fresh copy of the current page still carries the token, escaped
+      // inside script text, so it is matched by marker plus UUID shape rather than
+      // by exact quoting.
+      try {
+        const html = await (await fetch(location.href, { credentials: 'same-origin' })).text();
+        const m = /CSRF_TOKEN.{0,6}([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/.exec(html);
+        if (m) cfg.csrfToken = m[1];
+      } catch {
+        /* leave it null; GETs work without it */
+      }
+    }
     // The anon id is also a plain cookie; the cookie wins when both exist because
     // it is what the browser will actually send alongside the request.
     cfg.anonId = readCookie('anon_id') || cfg.anonId;
@@ -90,7 +103,7 @@
    */
   async function apiGet(path) {
     await limiter.acquire();
-    const cfg = getPageConfig();
+    const cfg = await getPageConfig();
     const headers = { Accept: 'application/json, text/plain, */*' };
     if (cfg.csrfToken) headers['x-csrf-token'] = cfg.csrfToken;
     if (cfg.anonId) headers['x-anon-id'] = cfg.anonId;
@@ -135,6 +148,182 @@
       });
     }
     return VB.done(json);
+  }
+
+  /**
+   * Classify a non-JSON or error response from Vinted so the caller can act on it.
+   * A DataDome human check comes back as a 403 whose body is either JSON with a
+   * captcha URL or an HTML stub with a `dd` config; both are turned into a
+   * HUMAN_CHECK failure that carries a URL a person can open.
+   */
+  function classifyFailure(path, status, contentType, body) {
+    const challenge = VB.relistBody.parseChallenge(body, {
+      referer: location.href,
+      datadomeCookie: readCookie('datadome'),
+    });
+    if (challenge) {
+      return VB.fail(ERR.HUMAN_CHECK, 'Vinted asked for a human check on ' + path, {
+        status,
+        captchaUrl: challenge.url,
+      });
+    }
+    if (status === 429) {
+      return VB.fail(ERR.RATE_LIMITED, 'Vinted rate-limited ' + path, { status });
+    }
+    if (!contentType.includes('json')) {
+      return VB.fail(ERR.NOT_JSON, 'Expected JSON from ' + path + ' but got HTTP ' + status + ' ' + (contentType || 'no content-type'), { status });
+    }
+    let json = null;
+    try {
+      json = JSON.parse(body);
+    } catch {
+      return VB.fail(ERR.NOT_JSON, 'Malformed JSON from ' + path, { status });
+    }
+    return VB.fail(ERR.HTTP, 'HTTP ' + status + ' on ' + path + ': ' + (json.message_code || json.message || ''), {
+      status,
+      apiCode: json.code,
+      messageCode: json.message_code,
+      details: json.errors || json.details || null,
+    });
+  }
+
+  /**
+   * Same-origin POST against Vinted's internal API, with the same headers the
+   * frontend sends. `body` is either a plain object (sent as JSON) or a FormData
+   * (sent as multipart, for photo uploads).
+   *
+   * @param {string} path
+   * @param {object|FormData} body
+   */
+  async function apiPost(path, body) {
+    await limiter.acquire();
+    const cfg = await getPageConfig();
+    const headers = { Accept: 'application/json, text/plain, */*' };
+    if (cfg.csrfToken) headers['x-csrf-token'] = cfg.csrfToken;
+    if (cfg.anonId) headers['x-anon-id'] = cfg.anonId;
+    const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
+    const isEmpty = body === null || body === undefined;
+    if (!isForm && !isEmpty) headers['content-type'] = 'application/json';
+    if (path.startsWith('/api/v2/item_upload') || path.startsWith('/api/v2/photos')) {
+      // Observed on the form's own requests. The dynamic-attribute flags are what
+      // make the server accept `item_attributes: [{code: 'condition', ...}]`; a
+      // create without them answered 500 {"code":105} with an otherwise identical
+      // body.
+      headers['x-upload-form'] = 'true';
+      headers['x-enable-dynamic-attribute-condition'] = 'true';
+      headers['x-enable-dynamic-attribute-size'] = 'true';
+      headers['x-enable-dynamic-attribute-video-game-rating'] = 'true';
+      const locale = readCookie('user-iso-locale') || readCookie('anonymous-iso-locale');
+      if (locale) headers.locale = locale;
+    }
+
+    let res;
+    try {
+      res = await fetch(site.domain + path, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers,
+        body: isForm ? body : isEmpty ? undefined : JSON.stringify(body),
+      });
+    } catch (err) {
+      return VB.fail(ERR.HTTP, 'Network error on ' + path + ': ' + String(err));
+    }
+    const contentType = res.headers.get('content-type') || '';
+    const text = await res.text();
+    // The create endpoint was observed answering 200 with nothing to parse. That is
+    // still a success; the caller resolves what it needs another way.
+    if (res.ok && !text.trim()) return VB.done(null);
+    if (!res.ok || !contentType.includes('json')) return classifyFailure(path, res.status, contentType, text);
+    try {
+      return VB.done(JSON.parse(text));
+    } catch (err) {
+      return VB.fail(ERR.NOT_JSON, 'Malformed JSON from ' + path + ': ' + String(err));
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Relisting: the write side of the API
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Upload one photo for a new listing.
+   *
+   * Field names match what Vinted's own form sends (verified live when the
+   * recreated listing was published): photo[file], photo[type]=item, and the
+   * upload session's temp_uuid so the create call can claim the photo.
+   *
+   * @param {{bytesBase64: string, mimeType: string, fileName: string, sessionId: string}} msg
+   */
+  async function uploadPhoto(msg) {
+    const bin = atob(msg.bytesBase64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+    const form = new FormData();
+    form.append('photo[file]', new Blob([bytes], { type: msg.mimeType || 'image/jpeg' }), msg.fileName || 'photo.jpg');
+    form.append('photo[temp_uuid]', msg.sessionId);
+    form.append('photo[type]', 'item');
+    const res = await apiPost('/api/v2/photos', form);
+    if (!res.ok) return res;
+    // Observed: { id, temp_uuid, url, thumbnails, ... }
+    if (res.value == null || res.value.id == null) {
+      return VB.fail(ERR.SHAPE, 'Photo upload answered without an id', { keys: Object.keys(res.value || {}) });
+    }
+    return VB.done({ id: res.value.id, tempUuid: res.value.temp_uuid || msg.sessionId });
+  }
+
+  /** The attribute form for a category: condition options with their real ids. */
+  function attributeForm(catalogId) {
+    return apiPost('/api/v2/item_upload/attributes', {
+      attributes: [{ code: 'category', value: [Number(catalogId)] }],
+    });
+  }
+
+  async function createItem(body, excludeId) {
+    const res = await apiPost('/api/v2/item_upload/items', body);
+    if (!res.ok) return res;
+    // Observed: the created item comes back under `item`; some deploys answer bare.
+    const item = res.value && res.value.item ? res.value.item : res.value;
+    if (item && item.id != null) {
+      return VB.done({ id: String(item.id), title: item.title || null, url: item.url || item.path || null });
+    }
+    // The response body was observed empty on one deploy. The new id is then found
+    // in the wardrobe, which lists newest first.
+    // Excluding the old listing's id matters: if the create silently failed, the
+    // old one would otherwise match by title and be mistaken for the new one.
+    const found = await findNewest(body.item.title, excludeId);
+    if (found) return VB.done({ id: found.id, title: found.title, url: found.url, resolvedFromWardrobe: true });
+    return VB.fail(ERR.SHAPE, 'Create answered without an item id and the wardrobe does not show it yet', {
+      keys: Object.keys(res.value || {}),
+    });
+  }
+
+  /**
+   * The newest wardrobe item with a given title, excluding one id. Used when the
+   * create response carried no id. A few short retries cover indexing lag.
+   */
+  async function findNewest(title, excludeId) {
+    const ctx = await buildContext();
+    const userId = ctx.viewerId;
+    if (!userId) return null;
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      if (attempt) await new Promise((r) => setTimeout(r, 2500));
+      const res = await apiGet(API.wardrobeItems(userId) + '?page=1&per_page=20&order=newest_first');
+      if (!res.ok) continue;
+      const hit = (res.value.items || []).find(
+        (it) => it && String(it.title) === String(title) && String(it.id) !== String(excludeId)
+      );
+      if (hit) {
+        wardrobeCache.set(String(hit.id), hit);
+        return { id: String(hit.id), title: hit.title, url: hit.url || null };
+      }
+    }
+    return null;
+  }
+
+  function deleteItem(itemId) {
+    // No body: the form's own successful delete sent an empty POST. The same call
+    // with `{}` and a JSON content-type answered 403 access_denied.
+    return apiPost('/api/v2/items/' + encodeURIComponent(itemId) + '/delete', null);
   }
 
   /** Fetch and parse a listing page. No navigation involved. */
@@ -611,6 +800,28 @@
   // Message handling
   // ---------------------------------------------------------------------------
 
+  /**
+   * Run a handler and always call sendResponse, even if it throws.
+   *
+   * Without this, an unexpected exception (e.g. res.text() failing mid-stream on
+   * a dropped connection) leaves sendResponse uncalled and the manager's message
+   * port open with nothing ever arriving on it. The manager's own per-listing
+   * timeout eventually recovers from that, but only after wasting up to 30s per
+   * attempt across all 3 retries; failing fast here means a real error is
+   * reported immediately instead of masquerading as a hang.
+   *
+   * @param {() => Promise<any>} fn
+   * @param {(value: any) => void} sendResponse
+   */
+  function guarded(fn, sendResponse) {
+    Promise.resolve()
+      .then(fn)
+      .then(sendResponse, (err) => {
+        VB.log.error(SCOPE, 'Message handler threw', String((err && err.stack) || err));
+        sendResponse(VB.fail(ERR.HTTP, 'Unexpected error: ' + String(err)));
+      });
+  }
+
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (!message || typeof message.type !== 'string') return false;
 
@@ -620,19 +831,39 @@
         return false;
 
       case MSG.PROXY_CONTEXT:
-        buildContext().then((context) => sendResponse(VB.done(context)));
+        guarded(async () => VB.done(await buildContext()), sendResponse);
         return true;
 
       case MSG.PROXY_COLLECT_IDS:
-        collectItemIds(message.options || {}).then(sendResponse);
+        guarded(() => collectItemIds(message.options || {}), sendResponse);
         return true;
 
       case MSG.PROXY_FETCH_ITEM:
-        fetchItem(message.itemId, message.userId).then(sendResponse);
+        guarded(() => fetchItem(message.itemId, message.userId), sendResponse);
         return true;
 
       case MSG.PROXY_FETCH_HTML:
-        fetchItemPage(message.itemId).then(sendResponse);
+        guarded(() => fetchItemPage(message.itemId), sendResponse);
+        return true;
+
+      case MSG.PROXY_UPLOAD_PHOTO:
+        guarded(() => uploadPhoto(message), sendResponse);
+        return true;
+
+      case MSG.PROXY_ATTRIBUTE_FORM:
+        guarded(() => attributeForm(message.catalogId), sendResponse);
+        return true;
+
+      case MSG.PROXY_COLORS:
+        guarded(() => apiGet(API.colors), sendResponse);
+        return true;
+
+      case MSG.PROXY_CREATE_ITEM:
+        guarded(() => createItem(message.body, message.excludeId), sendResponse);
+        return true;
+
+      case MSG.PROXY_DELETE_ITEM:
+        guarded(() => deleteItem(message.itemId), sendResponse);
         return true;
 
       case MSG.OVERLAY_UPDATE:

@@ -35,6 +35,18 @@
     /** Fetch and parse only the listing page; returns extracted fields. */
     PROXY_FETCH_HTML: 'PROXY_FETCH_HTML',
 
+    // --- relisting, also proxied to a Vinted tab --------------------------------
+    /** POST /api/v2/photos with one image (base64 in the message); returns the temp photo. */
+    PROXY_UPLOAD_PHOTO: 'PROXY_UPLOAD_PHOTO',
+    /** POST /api/v2/item_upload/attributes for a category; returns the attribute form. */
+    PROXY_ATTRIBUTE_FORM: 'PROXY_ATTRIBUTE_FORM',
+    /** GET /api/v2/item_upload/colors; returns the colour list. */
+    PROXY_COLORS: 'PROXY_COLORS',
+    /** POST /api/v2/item_upload/items with a prepared body; returns the created item. */
+    PROXY_CREATE_ITEM: 'PROXY_CREATE_ITEM',
+    /** POST /api/v2/items/{id}/delete. */
+    PROXY_DELETE_ITEM: 'PROXY_DELETE_ITEM',
+
     // --- broadcasts ----------------------------------------------------------
     /** Run state changed; payload is the full run state object. */
     STATE_CHANGED: 'STATE_CHANGED',
@@ -55,6 +67,10 @@
     NO_IMAGES: 'NO_IMAGES',
     WRITE_FAILED: 'WRITE_FAILED',
     VERIFY_FAILED: 'VERIFY_FAILED',
+    /** Vinted asked for a human check (DataDome); `captchaUrl` carries where to do it. */
+    HUMAN_CHECK: 'HUMAN_CHECK',
+    /** HTTP 429 from Vinted. */
+    RATE_LIMITED: 'RATE_LIMITED',
   };
 
   /**

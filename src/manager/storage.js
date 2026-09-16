@@ -122,6 +122,24 @@
       return this.backend.readManifest();
     }
 
+    async readMetadata(folder) {
+      const missing = this.#require();
+      if (missing) return missing;
+      return this.backend.readMetadata(folder);
+    }
+
+    async readRaw(folder) {
+      const missing = this.#require();
+      if (missing) return missing;
+      return this.backend.readRaw(folder);
+    }
+
+    async readImages(folder) {
+      const missing = this.#require();
+      if (missing) return missing;
+      return this.backend.readImages(folder);
+    }
+
     async scan() {
       const missing = this.#require();
       if (missing) return missing;

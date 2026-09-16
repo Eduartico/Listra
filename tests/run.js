@@ -28,8 +28,10 @@ const MODULES = [
   'src/common/rate-limiter.js',
   'src/common/page-data.js',
   'src/common/normalize.js',
+  'src/common/relist-body.js',
   'src/content/dom-extractor.js',
   'src/manager/storage-idb.js',
+  'src/manager/storage-fsa.js',
 ];
 
 for (const rel of MODULES) {
@@ -326,6 +328,138 @@ section('Snapshot from a live wardrobe record');
   ok(VB.normalize.validateSnapshot(s).ok, 'validates');
 }
 
+section('Relist: condition and colour lookups');
+{
+  // Shape captured live from POST /api/v2/item_upload/attributes on vinted.pt.
+  const form = {
+    code: 0,
+    attributes: [
+      { code: 'brand', value_ids: null },
+      {
+        id: 431,
+        code: 'condition',
+        configuration: {
+          options: [
+            {
+              id: 1, title: 'Condition', type: 'group',
+              options: [
+                { id: 6, title: 'Novo com etiquetas' },
+                { id: 1, title: 'Novo sem etiquetas' },
+                { id: 2, title: 'Muito bom' },
+                { id: 3, title: 'Bom' },
+                { id: 4, title: 'Satisfatório' },
+              ],
+            },
+          ],
+        },
+      },
+    ],
+  };
+  const { conditionIdFromForm, colorIdsFromLabel } = VB.relistBody;
+  equal(conditionIdFromForm(form, 'Novo com etiquetas'), 6, 'new with tags is id 6 (not 1 as the brief said)');
+  equal(conditionIdFromForm(form, 'Muito bom'), 2, 'very good is id 2');
+  equal(conditionIdFromForm(form, 'muito bom'), 2, 'case-insensitive');
+  equal(conditionIdFromForm(form, 'Satisfatorio'), 4, 'accent-insensitive');
+  equal(conditionIdFromForm(form, 'Nope'), null, 'unknown label is null');
+  equal(conditionIdFromForm(null, 'Bom'), null, 'missing form is null');
+
+  const colors = [{ id: 1, title: 'Preto' }, { id: 28, title: 'Verde-escuro' }, { id: 12, title: 'Branco' }];
+  equal(colorIdsFromLabel(colors, 'Preto, Verde-escuro'), [1, 28], 'two colours from a comma label');
+  equal(colorIdsFromLabel(colors, 'branco'), [12], 'single colour, case-insensitive');
+  equal(colorIdsFromLabel(colors, 'Roxo'), [], 'unknown colour gives none');
+  equal(colorIdsFromLabel(colors, 'Preto, Branco, Verde-escuro'), [1, 12], 'capped at two, as the form allows');
+}
+
+section('Relist: create body');
+{
+  const snapshot = {
+    id: '10020059278', title: 'Monster Energy Export - Iberia Edition',
+    description: 'Cans are full and in perfect conditions!', price: 12, currency: 'EUR',
+    catalogId: 4915, brandId: 28917, brand: 'Monster Energy', conditionId: 6, colorIds: [1], packageSizeId: 1,
+    sizeId: null, listingState: { closed: false },
+  };
+  const res = VB.relistBody.buildCreateBody({ snapshot, raw: null, photoIds: [33379149812], sessionId: 'sess-1' });
+  ok(res.ok, 'builds a body from a complete backup', res.ok ? null : res.message);
+  const item = res.value.item;
+  equal(item.title, snapshot.title, 'title');
+  equal(item.catalog_id, 4915, 'catalog id');
+  equal(item.brand_id, 28917, 'brand id');
+  equal(item.price, 12, 'price');
+  equal(item.color_ids, [1], 'colour ids');
+  equal(item.package_size_id, 1, 'package size');
+  equal(item.item_attributes, [{ code: 'condition', ids: [6] }], 'condition as an item attribute');
+  equal(item.temp_uuid, 'sess-1', 'upload session id');
+  equal(item.assigned_photos.map((p) => p.id), [33379149812], 'photos attached by temp id');
+  ok(!('size_id' in item), 'no size_id key when the backup has none');
+  equal(res.missing, [], 'nothing assumed');
+  equal(res.value.push_up, false, 'no paid push-up');
+  equal(res.value.upload_session_id, 'sess-1', 'session id repeated at the top level (create 500s without it)');
+  ok('parcel' in res.value, 'parcel key present');
+
+  const soldSnapshot = { ...snapshot, conditionId: null, colorIds: [], packageSizeId: null };
+  const resolved = VB.relistBody.buildCreateBody({ snapshot: soldSnapshot, raw: null, photoIds: [1], sessionId: 's', resolved: { conditionId: 2, colorIds: [12] } });
+  ok(resolved.ok, 'uses ids resolved at relist time');
+  equal(resolved.value.item.item_attributes[0].ids, [2], 'resolved condition id wins');
+  equal(resolved.value.item.color_ids, [12], 'resolved colour ids win');
+  equal(resolved.value.item.package_size_id, 1, 'package size defaults to small');
+  ok(resolved.missing.some((m) => /package size/.test(m)), 'the assumption is reported');
+
+  const noCondition = VB.relistBody.buildCreateBody({ snapshot: soldSnapshot, raw: null, photoIds: [1], sessionId: 's' });
+  ok(!noCondition.ok && /condition id/.test(noCondition.message), 'refuses without a condition id');
+  const noPhotos = VB.relistBody.buildCreateBody({ snapshot, raw: null, photoIds: [], sessionId: 's' });
+  ok(!noPhotos.ok && noPhotos.code === VB.ERR.NO_IMAGES, 'refuses without photos');
+
+  // A category that requires size/material: the record's full item_attributes must
+  // be sent, or the create fails validation asking for the missing field.
+  const sized = VB.relistBody.buildCreateBody({
+    snapshot: { ...snapshot, conditionId: 1 },
+    raw: { _raw: { upload: { item: { item_attributes: [
+      { code: 'material', ids: [300] },
+      { code: 'condition', ids: [1] },
+      { code: 'size', ids: [620] },
+    ] } } } },
+    photoIds: [1, 2], sessionId: 's',
+  });
+  ok(sized.ok, 'builds a body for a category with size and material');
+  equal(sized.value.item.item_attributes, [
+    { code: 'material', ids: [300] },
+    { code: 'condition', ids: [1] },
+    { code: 'size', ids: [620] },
+  ], 'sends material, condition and size from the record');
+
+  const overridden = VB.relistBody.buildCreateBody({
+    snapshot: { ...snapshot, conditionId: null },
+    raw: { _raw: { upload: { item: { item_attributes: [ { code: 'condition', ids: [1] }, { code: 'size', ids: [620] } ] } } } },
+    photoIds: [1], sessionId: 's', resolved: { conditionId: 2 },
+  });
+  equal(overridden.value.item.item_attributes.find((a) => a.code === 'condition').ids, [2], 'resolved condition id overrides the record');
+
+  const withOwn = VB.relistBody.buildCreateBody({
+    snapshot: { ...snapshot, catalogId: null, brandId: null },
+    raw: { _raw: { upload: { item: { catalog_id: 4915, brand_id: 28917, is_unisex: true, isbn: null, measurement_length: null, measurement_width: null, size_id: 506 } } } },
+    photoIds: [1], sessionId: 's',
+  });
+  ok(withOwn.ok, 'falls back to the item_upload record for ids');
+  equal(withOwn.value.item.catalog_id, 4915, 'catalog id from item_upload');
+  equal(withOwn.value.item.is_unisex, true, 'unisex flag from item_upload');
+  equal(withOwn.value.item.size_id, 506, 'size id from item_upload');
+}
+
+section('Relist: human-check detection');
+{
+  const { parseChallenge } = VB.relistBody;
+  const json = parseChallenge('{"url":"https://geo.captcha-delivery.com/captcha/?initialCid=A&cid=B&referer=x"}');
+  ok(json && /captcha-delivery/.test(json.url), 'JSON challenge yields its url');
+  const html = "<html><body><script>var dd={'rt':'c','cid':'AHrlqAAA','hsh':'E6EAF460','t':'bv','r':'b','qp':'','s':46171,'e':'c0232786','host':'geo.captcha-delivery.com','cookie':'x'}</script></body></html>";
+  const fromHtml = parseChallenge(html, { referer: 'https://www.vinted.pt/member/1', datadomeCookie: 'DDCOOKIE' });
+  ok(fromHtml && fromHtml.url, 'HTML challenge yields a url');
+  ok(/initialCid=AHrlqAAA/.test(fromHtml.url) && /hash=E6EAF460/.test(fromHtml.url) && /cid=DDCOOKIE/.test(fromHtml.url), 'url carries cid, hash and the datadome cookie');
+  ok(/referer=https%3A%2F%2Fwww.vinted.pt/.test(fromHtml.url), 'url carries the referer');
+  equal(parseChallenge('{"code":106,"message":"Acesso negado"}'), null, 'an ordinary API error is not a challenge');
+  equal(parseChallenge('<html>La page nexiste pas</html>'), null, 'an ordinary 404 page is not a challenge');
+  equal(parseChallenge(''), null, 'empty body is not a challenge');
+}
+
 section('ZIP writer');
 {
   // Known CRC-32 of the string "123456789".
@@ -339,7 +473,116 @@ section('ZIP writer');
 // Timing test last: it is the only slow one.
 // ---------------------------------------------------------------------------
 
+/**
+ * Minimal in-memory stand-in for a FileSystemDirectoryHandle: only the surface
+ * FsaBackend actually calls (getFileHandle, getDirectoryHandle, removeEntry, and
+ * async iteration over entries). Good enough to exercise writeListing/verifyListing
+ * without a real browser.
+ */
+function fakeFileHandle(store, name) {
+  return {
+    kind: 'file',
+    async getFile() {
+      const f = store.get(name);
+      return { size: f.size, text: f.text };
+    },
+    async createWritable() {
+      let text = '';
+      let size = 0;
+      return {
+        async write(data) {
+          if (typeof data === 'string') {
+            text = data;
+            size = Buffer.byteLength(data);
+          } else {
+            // A Blob in the real writer; size is all writeListing checks for.
+            size = data.size;
+          }
+        },
+        async close() {
+          store.set(name, { size, text: async () => text });
+        },
+      };
+    },
+  };
+}
+
+function fakeDir() {
+  const files = new Map(); // name -> { size, text() }
+  const dirs = new Map(); // name -> fakeDir()
+  return {
+    files,
+    dirs,
+    kind: 'directory',
+    async getFileHandle(name, opts) {
+      if (!files.has(name)) {
+        if (!opts || !opts.create) throw new Error('NotFoundError: ' + name);
+        files.set(name, { size: 0, text: async () => '' });
+      }
+      return fakeFileHandle(files, name);
+    },
+    async getDirectoryHandle(name, opts) {
+      if (!dirs.has(name)) {
+        if (!opts || !opts.create) throw new Error('NotFoundError: ' + name);
+        dirs.set(name, fakeDir());
+      }
+      return dirs.get(name);
+    },
+    async removeEntry(name) {
+      files.delete(name);
+      dirs.delete(name);
+    },
+    entries() {
+      // Real handles, not placeholders: verifyListing calls .getFile() on
+      // whatever entries() yields, exactly as it would on a live directory.
+      const all = [
+        ...[...files.keys()].map((name) => [name, fakeFileHandle(files, name)]),
+        ...[...dirs.keys()].map((name) => [name, dirs.get(name)]),
+      ];
+      return {
+        [Symbol.asyncIterator]() {
+          let i = 0;
+          return { next: async () => (i < all.length ? { value: all[i++], done: false } : { value: undefined, done: true }) };
+        },
+      };
+    },
+  };
+}
+
 (async () => {
+  section('Folder backend (File System Access)');
+  {
+    const backend = new VB.FsaBackend();
+    backend.root = fakeDir();
+
+    const snapshot = (id) => ({ id, title: 'Test listing ' + id });
+    const image = (name, bytes) => ({ name, blob: new Blob([new Uint8Array(bytes)]) });
+
+    const first = await backend.writeListing('Folder', {
+      snapshot: snapshot(1),
+      images: [image('1.jpg', 10), image('2.jpg', 10), image('3.jpg', 10), image('4.jpg', 10), image('5.jpg', 10)],
+    });
+    ok(first.ok, 'writes a 5-image listing', first.ok ? null : first.message);
+
+    const listingDir = backend.root.dirs.get('Folder');
+    equal(listingDir.dirs.get('images').files.size, 5, 'all 5 images present after the first write');
+
+    // The regression this guards: a later run for the same folder with FEWER
+    // photos must not leave the earlier run's extra files behind, or the count
+    // verifyListing sees will exceed what this write actually produced.
+    const second = await backend.writeListing('Folder', {
+      snapshot: snapshot(1),
+      images: [image('1.jpg', 10), image('2.jpg', 10), image('3.jpg', 10)],
+    });
+    ok(second.ok, 'writes the same folder with fewer images', second.ok ? null : second.message);
+    equal(listingDir.dirs.get('images').files.size, 3, 'stale images from the larger previous write are gone');
+    ok(!listingDir.dirs.get('images').files.has('4.jpg'), 'image 4 specifically was removed');
+    ok(!listingDir.dirs.get('images').files.has('5.jpg'), 'image 5 specifically was removed');
+
+    const verify = await backend.verifyListing('Folder', 3);
+    ok(verify.ok, 'verification matches the new, smaller count', verify.ok ? null : verify.message);
+  }
+
   section('Rate limiter');
   {
     const limiter = new VB.RateLimiter();

@@ -55,14 +55,18 @@ generic HTML shell.
 Observed sequence for one listing with one photo:
 
 1. `GET /api/v2/item_upload/catalogs`
-2. `POST /api/v2/photos` — `multipart/form-data`; the field names were not captured
-   (binary body). Response: `{"id": 33379149812, "temp_uuid": "<upload session uuid>",
-   "url": …, "thumbnails": […]}`. The `id` is the temporary photo id used at step 6.
+2. `POST /api/v2/photos` — `multipart/form-data` with fields `photo[file]` (the
+   image), `photo[temp_uuid]` (the upload session uuid) and `photo[type]=item`
+   (verified: an upload with exactly these fields answered 200). Response:
+   `{"id": 33379149812, "temp_uuid": "<upload session uuid>", "url": …,
+   "thumbnails": […]}`. The `id` is the temporary photo id used at step 6.
 3. `POST /api/v2/item_upload/suggestions/categories` with
    `{"image_metadata":[{"image_id":"<photo image id>","orientation":"0"}],"upload_session_id":"<uuid>"}`
    — optional; suggestion only.
 4. `POST /api/v2/item_upload/attributes` with `{"attributes":[{"code":"category","value":[4915]}]}`
-   — returns the attribute form for that category (which fields apply).
+   — returns the attribute form for that category. Observed shape:
+   `{"attributes":[{"code":"condition","configuration":{"options":[{"type":"group","options":[{"id":6,"title":"Novo com etiquetas"},{"id":1,"title":"Novo sem etiquetas"},{"id":2,"title":"Muito bom"},{"id":3,"title":"Bom"},…]}]}},…]}`
+   — the real condition ids, which the listing page's attribute block does not carry.
 5. `GET /api/v2/item_upload/brands?category_id=4915`, `GET /api/v2/item_upload/colors`,
    `POST /api/v2/item_price_suggestions` — optional lookups.
 6. `POST /api/v2/item_upload/items` — the create. Observed body:
@@ -111,7 +115,31 @@ Sold listings have no `item_upload` record, so their ids come only from the page
 
 ## Deleting
 
-`POST /api/v2/items/{id}/delete` — empty body, 200. Closet counts drop immediately.
+`POST /api/v2/items/{id}/delete` — **empty body, no content-type** (200). The same
+call with `{}` and `content-type: application/json` answered 403 access_denied.
+Closet counts drop immediately.
+
+**Relist ordering:** delete the original before creating the replacement. Vinted
+rejects a create whose photos match a live listing, so create-then-delete gets both
+cancelled. Delete first, then recreate from the backup.
+
+**Create body** additionally needs, at the top level beside `item` and `push_up`:
+`upload_session_id` (the same uuid as `item.temp_uuid`) and `parcel` (null when
+shipping is default). Without `upload_session_id` the create answered 500 {"code":105}.
+The create POST also carries headers `x-upload-form: true`,
+`x-enable-dynamic-attribute-condition/size/video-game-rating: true` and `locale`;
+without the dynamic-attribute headers the create answered 500 {"code":105} too.
+
+## Bot protection on writes
+
+Two direct `POST /api/v2/item_upload/items` calls made by script (same cookies,
+same headers, same body as the form) were answered with a DataDome challenge —
+403 with an HTML stub carrying `var dd={'rt':'c','cid':…,'hsh':…,'t':'bv',…}` and
+`https://ct.captcha-delivery.com/c.js` — while the same create done through
+Vinted's own form minutes later went through. The photo upload before it was not
+challenged. The check page can be reconstructed as
+`https://geo.captcha-delivery.com/captcha/?initialCid=<dd.cid>&hash=<dd.hsh>&cid=<datadome cookie>&t=<dd.t>&referer=<page>&s=<dd.s>&e=<dd.e>`
+for a person to complete.
 
 ## Sign-in
 

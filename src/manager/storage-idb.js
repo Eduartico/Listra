@@ -202,6 +202,20 @@
       return tx(this.db, 'readonly', (store) => store.get(path));
     }
 
+    /**
+     * Delete every stored row whose path starts with `prefix`. Used before
+     * rewriting a listing's images: a re-run with fewer photos than last time
+     * must not leave the previous run's extra rows behind, or verifyListing later
+     * counts them and fails a listing that was actually stored correctly.
+     */
+    async deleteUnder(prefix) {
+      const existing = await this.entriesUnder(prefix);
+      if (!existing.length) return;
+      await tx(this.db, 'readwrite', (store) => {
+        for (const row of existing) store.delete(row.path);
+      });
+    }
+
     async writeListing(folder, payload) {
       if (!this.db) return VB.fail(VB.ERR.WRITE_FAILED, 'Storage not open');
       try {
@@ -221,6 +235,7 @@
             new Blob([payload.html], { type: 'text/html' })
           );
         }
+        await this.deleteUnder(folder + '/images/');
         for (const img of payload.images) {
           await this.put(folder + '/images/' + img.name, img.blob);
         }
@@ -259,6 +274,33 @@
       } catch (err) {
         return VB.fail(VB.ERR.VERIFY_FAILED, 'Verifying ' + folder + ': ' + String(err));
       }
+    }
+
+    async readMetadata(folder) {
+      const row = await this.get(folder + '/metadata.json');
+      if (!row) return VB.fail(VB.ERR.VERIFY_FAILED, folder + '/metadata.json missing');
+      try {
+        return VB.done(JSON.parse(await row.blob.text()));
+      } catch (err) {
+        return VB.fail(VB.ERR.VERIFY_FAILED, folder + '/metadata.json unreadable: ' + String(err));
+      }
+    }
+
+    async readRaw(folder) {
+      const row = await this.get(folder + '/raw.json');
+      if (!row) return VB.done(null);
+      try {
+        return VB.done(JSON.parse(await row.blob.text()));
+      } catch {
+        return VB.done(null);
+      }
+    }
+
+    async readImages(folder) {
+      const rows = await this.entriesUnder(folder + '/images/');
+      const out = rows.map((r) => ({ name: r.path.slice(r.path.lastIndexOf('/') + 1), blob: r.blob }));
+      out.sort((a, b) => parseInt(a.name, 10) - parseInt(b.name, 10));
+      return VB.done(out);
     }
 
     async writeManifest(manifest) {

@@ -88,6 +88,20 @@
     jitterMs: 300,
   };
 
+  /**
+   * Relisting creates listings on Vinted, which is the action its bot protection
+   * watches most closely. One at a time, well spaced, and stop at the first
+   * human-check or 429 rather than pushing through it.
+   */
+  const RELIST = {
+    /** Pause between two relists in a batch. */
+    gapMs: 20000,
+    /** Pause between the photo uploads of one listing. */
+    photoGapMs: 1500,
+    /** Small, medium, large as Vinted's form numbers them; used when a backup has no size. */
+    defaultPackageSizeId: 1,
+  };
+
   const LIMITS = {
     /** Max items per API page. Vinted caps this at 96. */
     perPage: 96,
@@ -122,6 +136,7 @@
     detectRegion,
     RATE_LIMIT,
     PAGE_RATE_LIMIT,
+    RELIST,
     LIMITS,
     STORAGE_KEYS,
   };

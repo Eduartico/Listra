@@ -3,21 +3,37 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Vinted Listing Backup</title>
+    <meta name="color-scheme" content="light dark" />
+    <title>Listra</title>
     <link rel="stylesheet" href="manager.css" />
   </head>
   <body>
     <header class="head">
-      <h1>Vinted Listing Backup</h1>
-      <p class="sub" data-el="context">No Vinted profile connected yet.</p>
+      <img class="head__logo" src="../../icons/icon48.png" alt="" width="36" height="36" />
+      <div>
+        <h1>Listra</h1>
+        <p class="sub" data-el="context">No Vinted profile connected yet.</p>
+      </div>
     </header>
 
     <p class="notice" data-el="notice" hidden></p>
 
+    <div class="modal" data-el="modal" hidden>
+      <div class="modal__box" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <h2 id="modal-title" data-el="modalTitle"></h2>
+        <p class="modal__body" data-el="modalBody"></p>
+        <div class="actions">
+          <button type="button" class="btn btn--primary" data-el="modalOk">Continue</button>
+          <button type="button" class="btn" data-el="modalCancel">Cancel</button>
+        </div>
+      </div>
+    </div>
+
     <main class="grid">
       <section class="card">
-        <h2>Destination</h2>
+        <h2>Where the backup lives</h2>
         <p class="destination" data-el="backendName">No destination chosen</p>
+        <p class="hint" data-el="destinationHint"></p>
         <div class="actions">
           <button type="button" class="btn btn--primary" data-el="chooseFolder">
             Choose backup folder
@@ -25,18 +41,17 @@
           <button type="button" class="btn" data-el="reconnectFolder" hidden>
             Reconnect folder
           </button>
-          <button type="button" class="btn btn--ghost" data-el="useBrowserStorage">
-            Use browser storage instead
+          <button type="button" class="btn" data-el="saveDownloads" hidden>
+            Save to Downloads folder
           </button>
           <button type="button" class="btn btn--ghost" data-el="exportZip" hidden>
             Export as ZIP
           </button>
+          <button type="button" class="btn btn--ghost" data-el="useBrowserStorage">
+            Use browser storage instead
+          </button>
         </div>
-        <p class="hint">
-          A folder is written to directly and stays readable outside the browser.
-          Browser storage is the fallback when the folder picker is unavailable, and
-          has to be exported as a ZIP to leave the browser.
-        </p>
+        <p class="hint" data-el="downloadsProgress"></p>
       </section>
 
       <section class="card">
@@ -73,6 +88,56 @@
         </label>
       </section>
 
+      <section class="card">
+        <h2>Relist</h2>
+        <p class="hint">
+          Relisting backs the listing up first, then — for a listing that is still
+          live — deletes it and recreates it from that backup with the same photos.
+          The delete comes first because Vinted rejects a new listing whose photos
+          match a live one. Sold listings are simply recreated. One at a time, with a
+          pause between each, because creating listings is what Vinted watches most
+          closely.
+        </p>
+        <div class="actions">
+          <button type="button" class="btn btn--primary" data-el="relistSelected" disabled>
+            Relist selected
+          </button>
+          <button type="button" class="btn" data-el="relistCancel" disabled>Stop</button>
+          <button type="button" class="btn btn--ghost" data-el="selectAll">Select all shown</button>
+          <button type="button" class="btn btn--ghost" data-el="selectNone">Clear selection</button>
+        </div>
+        <p class="timing" data-el="relistStatus"></p>
+        <div class="actions" data-el="humanCheckRow" hidden>
+          <button type="button" class="btn btn--warn" data-el="openHumanCheck">
+            Open Vinted's human check
+          </button>
+          <button type="button" class="btn" data-el="relistRetry">Retry</button>
+        </div>
+      </section>
+
+      <section class="card card--wide">
+        <div class="toolbar">
+          <h2>Listings <span class="count" data-el="gridCount"></span></h2>
+          <input type="search" class="search" placeholder="Search title, brand, category" data-el="search" />
+          <select data-el="filter" class="select">
+            <option value="all">All</option>
+            <option value="active">Active</option>
+            <option value="sold">Sold</option>
+            <option value="failed">Failed</option>
+            <option value="relisted">Relisted</option>
+          </select>
+          <select data-el="sort" class="select">
+            <option value="newest">Newest first</option>
+            <option value="title">Title A–Z</option>
+            <option value="price-asc">Price low to high</option>
+            <option value="price-desc">Price high to low</option>
+            <option value="photos">Most photos</option>
+          </select>
+        </div>
+        <p class="hint" data-el="queueEmpty">Nothing backed up yet.</p>
+        <div class="cards" data-el="cards"></div>
+      </section>
+
       <section class="card card--wide">
         <h2>Validation</h2>
         <div class="actions">
@@ -81,25 +146,6 @@
         <div data-el="validationPanel" hidden>
           <dl class="summary" data-el="validationSummary"></dl>
           <ul class="problems" data-el="validationProblems"></ul>
-        </div>
-      </section>
-
-      <section class="card card--wide">
-        <h2>Listings</h2>
-        <p class="hint" data-el="queueEmpty">Nothing queued yet.</p>
-        <div class="table-scroll">
-          <table class="queue">
-            <thead>
-              <tr>
-                <th scope="col">ID</th>
-                <th scope="col">Title</th>
-                <th scope="col">Stage</th>
-                <th scope="col">Images</th>
-                <th scope="col">Problem</th>
-              </tr>
-            </thead>
-            <tbody data-el="queueBody"></tbody>
-          </table>
         </div>
       </section>
 
@@ -125,11 +171,15 @@
     <script src="../common/rate-limiter.js"></script>
     <script src="../common/page-data.js"></script>
     <script src="../common/normalize.js"></script>
+    <script src="../common/relist-body.js"></script>
     <script src="storage-fsa.js"></script>
     <script src="storage-idb.js"></script>
     <script src="storage.js"></script>
     <script src="image-fetcher.js"></script>
     <script src="validator.js"></script>
     <script src="manager.js"></script>
+    <script src="grid.js"></script>
+    <script src="relist.js"></script>
+    <script src="export-downloads.js"></script>
   </body>
 </html>

@@ -155,6 +155,18 @@
     }
 
     /**
+     * Delete every file directly inside `dirHandle`. Used before rewriting a
+     * listing's images/ folder: a re-run whose photo count went down must not
+     * leave the previous run's extra files behind, or verifyListing later counts
+     * them and fails a listing that was actually written correctly.
+     */
+    async clearFiles(dirHandle) {
+      for await (const [name, handle] of dirHandle.entries()) {
+        if (handle.kind === 'file') await dirHandle.removeEntry(name).catch(() => {});
+      }
+    }
+
+    /**
      * Write one listing's folder, then read it back.
      *
      * The read-back is the point: a snapshot only counts as backed up once the
@@ -186,6 +198,10 @@
         }
 
         const imagesDir = await this.dir(listingDir, 'images', true);
+        // Clear before writing: a re-run with fewer photos than last time must not
+        // leave the old extras behind (they would otherwise inflate the count
+        // verifyListing sees and fail a listing that actually wrote correctly).
+        await this.clearFiles(imagesDir);
         for (const img of payload.images) {
           await this.writeFile(imagesDir, img.name, img.blob);
         }
@@ -228,6 +244,48 @@
         return VB.done({ images: count });
       } catch (err) {
         return VB.fail(VB.ERR.VERIFY_FAILED, 'Verifying ' + folder + ': ' + String(err));
+      }
+    }
+
+    /** metadata.json of one listing folder. */
+    async readMetadata(folder) {
+      if (!this.root) return VB.fail(VB.ERR.WRITE_FAILED, 'No backup folder selected');
+      try {
+        const dir = await this.dir(this.root, folder, false);
+        const file = await (await dir.getFileHandle('metadata.json')).getFile();
+        return VB.done(JSON.parse(await file.text()));
+      } catch (err) {
+        return VB.fail(VB.ERR.VERIFY_FAILED, folder + '/metadata.json unreadable: ' + String(err));
+      }
+    }
+
+    /** raw.json of one listing folder, or null when absent. */
+    async readRaw(folder) {
+      if (!this.root) return VB.fail(VB.ERR.WRITE_FAILED, 'No backup folder selected');
+      try {
+        const dir = await this.dir(this.root, folder, false);
+        const file = await (await dir.getFileHandle('raw.json')).getFile();
+        return VB.done(JSON.parse(await file.text()));
+      } catch {
+        return VB.done(null);
+      }
+    }
+
+    /** The image files of one listing, as blobs, in index order. */
+    async readImages(folder) {
+      if (!this.root) return VB.fail(VB.ERR.WRITE_FAILED, 'No backup folder selected');
+      try {
+        const dir = await this.dir(this.root, folder, false);
+        const imagesDir = await this.dir(dir, 'images', false);
+        const out = [];
+        for await (const [name, handle] of imagesDir.entries()) {
+          if (handle.kind !== 'file') continue;
+          out.push({ name, blob: await handle.getFile() });
+        }
+        out.sort((a, b) => parseInt(a.name, 10) - parseInt(b.name, 10));
+        return VB.done(out);
+      } catch (err) {
+        return VB.fail(VB.ERR.VERIFY_FAILED, folder + '/images unreadable: ' + String(err));
       }
     }
 

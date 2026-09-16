@@ -13,6 +13,15 @@
  *
  * No chrome.alarms keep-alive is needed as a result: nothing long-running lives
  * here to keep alive.
+ *
+ * This file calls chrome.tabs.query/create/update/sendMessage freely without the
+ * "tabs" permission, which is deliberate, not an oversight: querying or matching by
+ * `url` only needs the "tabs" permission for hosts the extension does NOT already
+ * have host_permissions for, and an extension can always see and message its own
+ * pages (the manager tab) regardless of permissions. Every tab this worker touches
+ * is either a Vinted origin (covered by host_permissions) or the extension's own
+ * manager page, so "tabs" would add nothing but a scarier install-time permission
+ * prompt. Confirmed live: the full backup flow works end-to-end without it.
  */
 importScripts(
   '../common/constants.js',
@@ -35,12 +44,11 @@ importScripts(
   const VINTED_URL_PATTERNS = REGIONS.map((r) => r.domain + '/*');
 
   /** Message types the manager page asks us to forward to a Vinted tab. */
-  const PROXIED = new Set([
-    MSG.PROXY_CONTEXT,
-    MSG.PROXY_COLLECT_IDS,
-    MSG.PROXY_FETCH_ITEM,
-    MSG.PROXY_FETCH_HTML,
-  ]);
+  const PROXIED = new Set(
+    // Every PROXY_* type is relayed; deriving the set from MSG means a type added
+    // in messages.js cannot be forgotten here again.
+    Object.values(MSG).filter((t) => t.startsWith('PROXY_'))
+  );
 
   // ---------------------------------------------------------------------------
   // Tab tracking
@@ -201,59 +209,87 @@ importScripts(
     }
   }
 
+  /**
+   * Run a handler and always call sendResponse, even if it throws.
+   *
+   * ensureProxyTab and friends call chrome.tabs.query/create without a wrapping
+   * try/catch, on the assumption that well-formed calls with granted permissions
+   * essentially never reject — but "essentially never" is not "never", and the
+   * manager's collectIds() awaits this round trip with no timeout of its own. An
+   * unhandled rejection here would otherwise leave sendResponse uncalled and the
+   * caller waiting indefinitely; this guarantees a fast, typed failure instead.
+   *
+   * @param {() => Promise<any>} fn
+   * @param {(value: any) => void} sendResponse
+   */
+  function guarded(fn, sendResponse) {
+    Promise.resolve()
+      .then(fn)
+      .then(sendResponse, (err) => {
+        VB.log.error(SCOPE, 'Message handler threw', String((err && err.stack) || err));
+        sendResponse(VB.fail(ERR.HTTP, 'Unexpected error: ' + String(err)));
+      });
+  }
+
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!message || typeof message.type !== 'string') return false;
 
     if (PROXIED.has(message.type)) {
-      proxyToVintedTab(message).then(sendResponse);
+      guarded(() => proxyToVintedTab(message), sendResponse);
       return true;
     }
 
     switch (message.type) {
       case MSG.OPEN_MANAGER:
-        openManagerTab().then((id) => sendResponse(VB.done(id)));
+        guarded(async () => VB.done(await openManagerTab()), sendResponse);
         return true;
 
       case MSG.START_BACKUP: {
         // Sent by the on-page button. Remember which tab it came from so the
         // manager proxies through the tab the user was actually looking at.
         const context = message.context || {};
-        (async () => {
+        guarded(async () => {
           if (sender.tab && sender.tab.id != null) await rememberProxyTab(sender.tab.id);
           await chrome.storage.local.set({ vb_pending_context: context });
           const tabId = await openManagerTab();
           // The manager may already be open and idle; nudge it either way.
           await sendToManager({ type: MSG.START_BACKUP, context });
-          sendResponse(VB.done(tabId));
-        })();
+          return VB.done(tabId);
+        }, sendResponse);
         return true;
       }
 
       case MSG.CANCEL_BACKUP:
-        sendToManager({ type: MSG.CANCEL_BACKUP }).then(() => sendResponse(VB.done(true)));
+        guarded(async () => {
+          await sendToManager({ type: MSG.CANCEL_BACKUP });
+          return VB.done(true);
+        }, sendResponse);
         return true;
 
       case MSG.GET_STATE:
-        readRunState().then(sendResponse);
+        guarded(readRunState, sendResponse);
         return true;
 
       case MSG.STATE_CHANGED:
         // Mirror progress onto the Vinted page overlay, best effort.
-        (async () => {
+        guarded(async () => {
           const tabId = await storedProxyTabId();
           if (tabId != null) {
-            chrome.tabs
+            await chrome.tabs
               .sendMessage(tabId, {
                 type: MSG.OVERLAY_UPDATE,
                 progress: message.progress,
               })
               .catch(() => {});
           }
-          sendResponse(VB.done(true));
-        })();
+          return VB.done(true);
+        }, sendResponse);
         return true;
 
       default:
+        // Answer, rather than stay silent: a silent unknown type shows up at the
+        // sender as "No response from the Vinted tab", which points the wrong way.
+        sendResponse(VB.fail(ERR.HTTP, 'The service worker does not handle "' + message.type + '"'));
         return false;
     }
   });

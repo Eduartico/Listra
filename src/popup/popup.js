@@ -56,13 +56,24 @@
   }
 
   el.open.addEventListener('click', async () => {
-    await chrome.runtime.sendMessage({ type: MSG.OPEN_MANAGER });
-    window.close();
+    try {
+      await chrome.runtime.sendMessage({ type: MSG.OPEN_MANAGER });
+      window.close();
+    } catch {
+      // The service worker can be mid-restart right when the popup opens (a
+      // normal MV3 event, not a bug); without this the click would silently do
+      // nothing and the popup would stay open with no explanation.
+      el.timing.textContent = 'Could not reach the extension. Try again.';
+    }
   });
 
   el.cancel.addEventListener('click', async () => {
     el.cancel.disabled = true;
-    await chrome.runtime.sendMessage({ type: MSG.CANCEL_BACKUP });
+    try {
+      await chrome.runtime.sendMessage({ type: MSG.CANCEL_BACKUP });
+    } catch {
+      el.timing.textContent = 'Could not reach the extension. Try again.';
+    }
     refresh();
   });
 

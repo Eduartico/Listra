@@ -351,13 +351,23 @@
   // The run
   // ---------------------------------------------------------------------------
 
+  /**
+   * Bounded even though the happy path is normally quick: pagination through a
+   * very large wardrobe, or a slow tab-open-and-wait when no Vinted tab exists
+   * yet, can legitimately take tens of seconds. Unlike each listing's own
+   * pipeline (wrapped by processWithRetries), nothing else here bounds this call,
+   * so it gets its own generous but finite ceiling rather than none at all.
+   */
+  const COLLECT_TIMEOUT_MS = 90000;
+
   async function collectIds(context, limit) {
     state.status = 'collecting';
     await persist();
-    const res = await proxy({
-      type: MSG.PROXY_COLLECT_IDS,
-      options: { userId: context.profileUserId, limit },
-    });
+    const res = await withTimeout(
+      proxy({ type: MSG.PROXY_COLLECT_IDS, options: { userId: context.profileUserId, limit } }),
+      COLLECT_TIMEOUT_MS,
+      'Listing your profile took too long'
+    );
     if (!res.ok) return res;
     return VB.done(res.value);
   }
@@ -377,6 +387,10 @@
       setNotice('Choose where the backup should go first.', 'warn');
       return;
     }
+    if (VB.relist && VB.relist.isBusy()) {
+      setNotice('Wait for the relist to finish before starting a backup.', 'warn');
+      return;
+    }
 
     const o = options || {};
     running = true;
@@ -385,8 +399,16 @@
     try {
       if (o.context) state.context = o.context;
       if (!state.context) {
-        // No context yet: ask whichever Vinted tab we can reach.
-        const ctxRes = await proxy({ type: MSG.PROXY_CONTEXT });
+        // No context yet: ask whichever Vinted tab we can reach. Bounded like
+        // collectIds() below — this is the one round trip in the whole run that
+        // otherwise had no timeout at all, and an indefinite hang here means
+        // `running` never resets and the UI is stuck disabled until the manager
+        // tab is reloaded.
+        const ctxRes = await withTimeout(
+          proxy({ type: MSG.PROXY_CONTEXT }),
+          COLLECT_TIMEOUT_MS,
+          'Could not reach a Vinted tab in time'
+        );
         if (!ctxRes.ok) {
           setNotice(
             'Open your Vinted profile in another tab, then start the backup again.',
@@ -426,6 +448,9 @@
         }));
         state.durations = [];
         state.limit = o.limit || null;
+        // A fresh queue is a fresh run; the previous run's clock must not carry over.
+        state.startedAt = null;
+        state.finishedAt = null;
         VB.log.info(SCOPE, 'Queued ' + state.queue.length + ' listings');
       }
 
@@ -460,6 +485,8 @@
 
       state.status = cancelRequested ? 'cancelled' : 'done';
       state.finishedAt = Date.now();
+      // Folders were rewritten; the grid's cached photos and metadata are stale.
+      if (VB.grid) VB.grid.invalidateAll();
       await persist();
       await flushManifest();
 
@@ -471,7 +498,14 @@
       setNotice(summary, failed ? 'warn' : 'ok');
       notify(summary);
     } finally {
+      // The last render() before this point ran from inside persist(), while
+      // running was still true — every button disabled state computed from
+      // `running` was baked into the DOM at that moment and nothing else
+      // re-renders afterward. Without this call the Start button stays visibly
+      // (but not actually) disabled forever after any run ends, recoverable only
+      // by reloading the tab, which a user has no reason to know to do.
       running = false;
+      render();
     }
   }
 
@@ -485,7 +519,7 @@
       .create({
         type: 'basic',
         iconUrl: chrome.runtime.getURL('icons/icon128.png'),
-        title: 'Vinted Listing Backup',
+        title: 'Listra',
         message,
       })
       .catch(() => {});
@@ -576,6 +610,40 @@
     });
   }
 
+  /**
+   * In-page confirmation. Not window.confirm: a native dialog is auto-dismissed
+   * when the page is attached to a debugger, and looks out of place regardless.
+   *
+   * @param {string} title
+   * @param {string} body may contain newlines
+   * @param {string} [okLabel]
+   * @returns {Promise<boolean>}
+   */
+  function confirmDialog(title, body, okLabel) {
+    return new Promise((resolve) => {
+      el.modalTitle.textContent = title;
+      el.modalBody.textContent = body;
+      el.modalOk.textContent = okLabel || 'Continue';
+      el.modal.hidden = false;
+      const done = (value) => {
+        el.modal.hidden = true;
+        el.modalOk.removeEventListener('click', onOk);
+        el.modalCancel.removeEventListener('click', onCancel);
+        document.removeEventListener('keydown', onKey);
+        resolve(value);
+      };
+      const onOk = () => done(true);
+      const onCancel = () => done(false);
+      const onKey = (e) => {
+        if (e.key === 'Escape') done(false);
+      };
+      el.modalOk.addEventListener('click', onOk);
+      el.modalCancel.addEventListener('click', onCancel);
+      document.addEventListener('keydown', onKey);
+      el.modalOk.focus();
+    });
+  }
+
   function setNotice(message, kind) {
     el.notice.textContent = message;
     el.notice.className = 'notice notice--' + (kind || 'ok');
@@ -598,38 +666,23 @@
     el.chooseFolder.hidden = !info.canChooseFolder;
     el.useBrowserStorage.hidden = !info.canUseBrowserStorage || info.backend === 'idb';
     el.exportZip.hidden = info.backend !== 'idb';
-    el.start.disabled = info.status !== 'ready' || running;
+    el.saveDownloads.hidden = info.backend !== 'idb';
+    // Browser storage is invisible from outside the browser, which is the single
+    // most confusing thing about it, so say so and point at the way out.
+    el.destinationHint.textContent =
+      info.backend === 'idb'
+        ? (info.canChooseFolder
+            ? 'This is inside the browser, not a folder you can open. Pick a folder above to write to disk directly, or use "Save to Downloads folder" to copy everything into Downloads/Listra.'
+            : 'This browser has no folder picker (Brave switches it off), so the backup is kept inside the browser and is not a folder you can open. "Save to Downloads folder" copies everything into Downloads/Listra as real files; "Export as ZIP" makes one archive.')
+        : info.status === 'ready'
+          ? 'Files are written straight into this folder as the backup runs.'
+          : 'Pick a folder on your computer; the backup is written there as ordinary files.';
+    el.start.disabled = info.status !== 'ready' || running || !!(VB.relist && VB.relist.isBusy());
   }
 
+  /** The listings grid lives in grid.js; it is loaded after this file. */
   function renderQueue() {
-    const rows = state.queue;
-    el.queueBody.replaceChildren();
-    if (!rows.length) {
-      el.queueEmpty.hidden = false;
-      return;
-    }
-    el.queueEmpty.hidden = true;
-
-    const fragment = document.createDocumentFragment();
-    for (const entry of rows) {
-      const tr = document.createElement('tr');
-      tr.className = 'row row--' + entry.status;
-      const cells = [
-        entry.id,
-        entry.title || '—',
-        entry.status.replace(/_/g, ' '),
-        entry.imageCount == null ? '—' : String(entry.imageCount),
-        entry.error || '',
-      ];
-      for (const value of cells) {
-        const td = document.createElement('td');
-        // textContent throughout: listing titles are remote data and never HTML.
-        td.textContent = value;
-        tr.appendChild(td);
-      }
-      fragment.appendChild(tr);
-    }
-    el.queueBody.appendChild(fragment);
+    if (VB.grid) VB.grid.render();
   }
 
   function renderProgress() {
@@ -746,6 +799,46 @@
     }
     return false;
   });
+
+  /**
+   * What the sibling modules (grid.js, relist.js, export-downloads.js) need from
+   * the orchestrator. They are separate files only to keep this one readable; they
+   * run in the same page and share this state.
+   */
+  VB.manager = {
+    el,
+    storage,
+    proxy,
+    withTimeout,
+    setNotice,
+    confirmDialog,
+    persist,
+    render,
+    getState: () => state,
+    isRunning: () => running,
+    /** Back up one queue entry now (fetch, download, write, verify). */
+    backupEntry: (entry) => processWithRetries(entry),
+    /** Add a listing id to the queue and back it up; returns the entry. */
+    async backupNewId(id) {
+      let entry = state.queue.find((e) => e.id === String(id));
+      if (!entry) {
+        entry = {
+          id: String(id), status: 'pending', title: null, folder: null, attempts: 0,
+          error: null, imageCount: null, bytes: null, price: null, currency: null,
+        };
+        state.queue.unshift(entry);
+      }
+      const res = await processWithRetries(entry);
+      entry.status = res.ok ? 'completed' : 'failed';
+      entry.error = res.ok ? null : res.message;
+      await persist();
+      await flushManifest();
+      return entry;
+    },
+    async flushManifest() {
+      return flushManifest();
+    },
+  };
 
   (async function boot() {
     bind();
