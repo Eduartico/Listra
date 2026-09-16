@@ -1,0 +1,189 @@
+/*
+ * Manager page styling.
+ *
+ * Plain CSS, one file, no framework — the page is six panels and a table, and a
+ * build step for that would cost more than it saves. Colours are defined once as
+ * custom properties so the dark-on-light choice is in one place.
+ */
+
+:root {
+  --bg: #f4f6f8;
+  --panel: #ffffff;
+  --ink: #16202a;
+  --ink-soft: #5d6b78;
+  --line: #dde3e9;
+  --brand: #09b1ba;
+  --brand-dark: #078d94;
+  --ok: #17794f;
+  --warn: #8a5a00;
+  --error: #b3261e;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 24px;
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.head { margin-bottom: 16px; }
+.head h1 { margin: 0; font-size: 20px; }
+.sub { margin: 4px 0 0; color: var(--ink-soft); }
+
+.notice {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border-left: 4px solid var(--ok);
+  background: #fff;
+}
+.notice--ok { border-left-color: var(--ok); }
+.notice--warn { border-left-color: var(--warn); }
+.notice--error { border-left-color: var(--error); }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.card {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+.card--wide { grid-column: 1 / -1; }
+.card h2 { margin: 0 0 12px; font-size: 15px; }
+
+.destination { margin: 0 0 12px; font-weight: 600; }
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.btn {
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn:hover:not(:disabled) { border-color: var(--ink-soft); }
+.btn:disabled { opacity: 0.5; cursor: default; }
+
+.btn--primary {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: #fff;
+}
+.btn--primary:hover:not(:disabled) { background: var(--brand-dark); }
+.btn--ghost { background: transparent; }
+
+.hint { margin: 8px 0 0; color: var(--ink-soft); font-size: 12.5px; }
+.hint--inline { display: block; }
+
+.progress__bar {
+  height: 8px;
+  border-radius: 999px;
+  background: #e6ebf0;
+  overflow: hidden;
+}
+.progress__fill {
+  height: 100%;
+  width: 0;
+  background: var(--brand);
+  transition: width 220ms ease;
+}
+.progress__meta {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+.badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #eef2f5;
+  font-size: 12px;
+  text-transform: capitalize;
+}
+.count { font-variant-numeric: tabular-nums; color: var(--ink-soft); }
+
+.current {
+  margin: 10px 0 0;
+  font-weight: 600;
+  /* A long listing title must not widen the panel. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.timing { margin: 2px 0 12px; color: var(--ink-soft); }
+
+.limit { display: block; margin-top: 8px; color: var(--ink-soft); }
+.limit input {
+  width: 80px;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 12px 0;
+}
+.summary dt { color: var(--ink-soft); }
+.summary dd { margin: 0; font-weight: 600; }
+
+.problems { margin: 0; padding-left: 18px; }
+.problems li { color: var(--error); }
+
+.table-scroll { overflow-x: auto; }
+
+.queue {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.queue th,
+.queue td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+.queue th { color: var(--ink-soft); font-weight: 600; }
+.queue td:nth-child(2) { max-width: 320px; }
+.queue td:nth-child(5) { color: var(--error); max-width: 360px; }
+
+.row--completed td:nth-child(3) { color: var(--ok); }
+.row--failed td:nth-child(3) { color: var(--error); }
+
+.log {
+  max-height: 260px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0f1419;
+  color: #d8e0e7;
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  list-style: none;
+}
+.log__line { white-space: pre-wrap; word-break: break-word; }
+.log__line--warn { color: #ffc978; }
+.log__line--error { color: #ff9c92; }

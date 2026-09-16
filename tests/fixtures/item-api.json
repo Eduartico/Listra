@@ -1,0 +1,44 @@
+{
+  "id": 123456789,
+  "title": "Nike Air Max 90 / Sneakers",
+  "description": "Worn twice, like new.",
+  "price": { "amount": "45.00", "currency_code": "EUR" },
+  "original_price_numeric": "90.00",
+  "brand_title": "Nike",
+  "size_title": "42",
+  "status_id": "3",
+  "catalog_id": 123,
+  "catalog_breadcrumbs": [
+    { "id": 1, "title": "Women", "code": "women" },
+    { "id": 123, "title": "Shoes", "code": "shoes" }
+  ],
+  "photos": [
+    {
+      "id": 111,
+      "url": "https://images1.vinted.net/t/thumb/111.jpg",
+      "full_size_url": "https://images1.vinted.net/t/full/111.jpg",
+      "width": 800,
+      "height": 600
+    },
+    {
+      "id": 112,
+      "url": "https://images1.vinted.net/t/thumb/112.webp",
+      "full_size_url": "https://images1.vinted.net/t/full/112.webp",
+      "width": 1200,
+      "height": 1600
+    }
+  ],
+  "user": { "id": 99999, "login": "seller123", "feedback_reputation": 4.9 },
+  "created_at_ts": 1700000000,
+  "updated_at_ts": 1700100000,
+  "favourite_count": 12,
+  "view_count": 340,
+  "service_fee": "3.50",
+  "city": "Paris",
+  "country_title": "France",
+  "color1": "Black",
+  "material_id": 5,
+  "delivery_options": [
+    { "carrier": "Mondial Relay", "price": { "amount": "3.99", "currency_code": "EUR" } }
+  ]
+}

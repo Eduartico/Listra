@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vinted Listing Backup</title>
+    <link rel="stylesheet" href="manager.css" />
+  </head>
+  <body>
+    <header class="head">
+      <h1>Vinted Listing Backup</h1>
+      <p class="sub" data-el="context">No Vinted profile connected yet.</p>
+    </header>
+
+    <p class="notice" data-el="notice" hidden></p>
+
+    <main class="grid">
+      <section class="card">
+        <h2>Destination</h2>
+        <p class="destination" data-el="backendName">No destination chosen</p>
+        <div class="actions">
+          <button type="button" class="btn btn--primary" data-el="chooseFolder">
+            Choose backup folder
+          </button>
+          <button type="button" class="btn" data-el="reconnectFolder" hidden>
+            Reconnect folder
+          </button>
+          <button type="button" class="btn btn--ghost" data-el="useBrowserStorage">
+            Use browser storage instead
+          </button>
+          <button type="button" class="btn btn--ghost" data-el="exportZip" hidden>
+            Export as ZIP
+          </button>
+        </div>
+        <p class="hint">
+          A folder is written to directly and stays readable outside the browser.
+          Browser storage is the fallback when the folder picker is unavailable, and
+          has to be exported as a ZIP to leave the browser.
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>Backup</h2>
+        <div class="progress">
+          <div class="progress__bar">
+            <div class="progress__fill" data-el="progressFill"></div>
+          </div>
+          <div class="progress__meta">
+            <span class="badge" data-el="status">idle</span>
+            <span class="count" data-el="progressCount">&mdash;</span>
+          </div>
+        </div>
+        <p class="current" data-el="current"></p>
+        <p class="timing" data-el="timing"></p>
+
+        <div class="actions">
+          <button type="button" class="btn btn--primary" data-el="start" disabled>
+            Back up all listings
+          </button>
+          <button type="button" class="btn" data-el="cancel" disabled>Cancel</button>
+          <button type="button" class="btn btn--ghost" data-el="reset" disabled>
+            Clear queue
+          </button>
+        </div>
+
+        <label class="limit">
+          First
+          <input type="number" min="1" step="1" placeholder="all" data-el="limit" />
+          listings only
+          <span class="hint hint--inline">
+            Leave empty to back up everything. Useful for a first test run.
+          </span>
+        </label>
+      </section>
+
+      <section class="card card--wide">
+        <h2>Validation</h2>
+        <div class="actions">
+          <button type="button" class="btn" data-el="validate">Validate backup</button>
+        </div>
+        <div data-el="validationPanel" hidden>
+          <dl class="summary" data-el="validationSummary"></dl>
+          <ul class="problems" data-el="validationProblems"></ul>
+        </div>
+      </section>
+
+      <section class="card card--wide">
+        <h2>Listings</h2>
+        <p class="hint" data-el="queueEmpty">Nothing queued yet.</p>
+        <div class="table-scroll">
+          <table class="queue">
+            <thead>
+              <tr>
+                <th scope="col">ID</th>
+                <th scope="col">Title</th>
+                <th scope="col">Stage</th>
+                <th scope="col">Images</th>
+                <th scope="col">Problem</th>
+              </tr>
+            </thead>
+            <tbody data-el="queueBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card card--wide">
+        <h2>Log</h2>
+        <div class="actions">
+          <button type="button" class="btn btn--ghost" data-el="clearLog">Clear log</button>
+        </div>
+        <ul class="log" data-el="log"></ul>
+      </section>
+    </main>
+
+    <!--
+      Classic scripts in dependency order. Extension pages could use ES modules, but
+      content scripts cannot, so the whole extension shares one namespace pattern
+      instead of maintaining two module formats for the same files.
+    -->
+    <script src="../common/constants.js"></script>
+    <script src="../common/messages.js"></script>
+    <script src="../common/logger.js"></script>
+    <script src="../common/selectors.js"></script>
+    <script src="../common/sanitize.js"></script>
+    <script src="../common/rate-limiter.js"></script>
+    <script src="../common/page-data.js"></script>
+    <script src="../common/normalize.js"></script>
+    <script src="storage-fsa.js"></script>
+    <script src="storage-idb.js"></script>
+    <script src="storage.js"></script>
+    <script src="image-fetcher.js"></script>
+    <script src="validator.js"></script>
+    <script src="manager.js"></script>
+  </body>
+</html>

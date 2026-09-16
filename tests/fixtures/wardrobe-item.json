@@ -1,0 +1,239 @@
+{
+  "id": 10013561214,
+  "title": "Sudadera Nike",
+  "user_id": 100000001,
+  "price": {
+    "amount": "8.0",
+    "currency_code": "EUR"
+  },
+  "currency": "EUR",
+  "user": {
+    "id": 100000001,
+    "login": "seller_example",
+    "photo": {
+      "id": 335278051,
+      "width": 600,
+      "height": 800,
+      "temp_uuid": null,
+      "url": "https://images1.vinted.net/t/02_021b7_xTKnxyHPuiiSWmkX7UPArcy1/f800/1789405669.jpeg?s=b7a5f7425b3cc17fe0dc53295af7dbef41331192",
+      "dominant_color": "#31abc2",
+      "dominant_color_opaque": "#C1E6ED",
+      "thumbnails": [
+        {
+          "type": "thumb310",
+          "url": "https://images1.vinted.net/t/02_021b7_xTKnxyHPuiiSWmkX7UPArcy1/310x310/1789405669.jpeg?s=490534be1c3db2e79f15cf86a8f15d00dd1f92c4",
+          "width": 310,
+          "height": 310,
+          "original_size": null
+        },
+        {
+          "type": "thumb150",
+          "url": "https://images1.vinted.net/t/02_021b7_xTKnxyHPuiiSWmkX7UPArcy1/150x150/1789405669.jpeg?s=131b78db9a68e68f78a00e94a88189f450809a3d",
+          "width": 150,
+          "height": 150,
+          "original_size": null
+        },
+        {
+          "type": "thumb100",
+          "url": "https://images1.vinted.net/t/02_021b7_xTKnxyHPuiiSWmkX7UPArcy1/100x100/1789405669.jpeg?s=a246bd36e06400ed3e757adf916fd0d14d6c4523",
+          "width": 100,
+          "height": 100,
+          "original_size": null
+        },
+        {
+          "type": "thumb50",
+          "url": "https://images1.vinted.net/t/02_021b7_xTKnxyHPuiiSWmkX7UPArcy1/50x50/1789405669.jpeg?s=77a913818e061c22fefa08f496e20891a0d7213e",
+          "width": 50,
+          "height": 50,
+          "original_size": null
+        },
+        {
+          "type": "thumb20",
+          "url": "https://images1.vinted.net/t/02_021b7_xTKnxyHPuiiSWmkX7UPArcy1/20x20/1789405669.jpeg?s=3ee415c021e8913e0533f4c6f78bcb8886f8b309",
+          "width": 20,
+          "height": 20,
+          "original_size": null
+        }
+      ],
+      "is_suspicious": false,
+      "orientation": null,
+      "high_resolution": {
+        "id": "02_021b7_xTKnxyHPuiiSWmkX7UPArcy1",
+        "timestamp": 1789405669,
+        "orientation": null
+      },
+      "full_size_url": "https://images1.vinted.net/tc/02_021b7_xTKnxyHPuiiSWmkX7UPArcy1/1789405669.jpeg?s=66332baabe92d15c73768a82276edcdb81dff35e",
+      "is_hidden": false,
+      "extra": {}
+    },
+    "profile_url": "https://www.vinted.pt/member/100000001-seller_example",
+    "business": false
+  },
+  "path": "/items/10013561214-sudadera-nike",
+  "is_draft": false,
+  "is_closed": false,
+  "is_reserved": false,
+  "is_hidden": false,
+  "transaction_permitted": true,
+  "is_processing": false,
+  "is_business_user": false,
+  "favourite_count": 4,
+  "is_favourite": false,
+  "service_fee": {
+    "amount": "1.1",
+    "currency_code": "EUR"
+  },
+  "total_item_price": {
+    "amount": "9.1",
+    "currency_code": "EUR"
+  },
+  "photos": [
+    {
+      "id": 42402552690,
+      "image_no": 1,
+      "width": 600,
+      "height": 800,
+      "dominant_color": "#27282A",
+      "dominant_color_opaque": "#BEBFBF",
+      "url": "https://images1.vinted.net/t/03_024d9_w2j5AraJr5Q14kAHRwG8HLHg/f800/1789490354.jpeg?s=b2b00e9b6a0509e084724006661485af038021a5",
+      "is_main": true,
+      "thumbnails": [
+        {
+          "type": "thumb70x100",
+          "url": "https://images1.vinted.net/t/03_024d9_w2j5AraJr5Q14kAHRwG8HLHg/70x100/1789490354.jpeg?s=5ef9096fa66f911470e625978b67d2a1f59e2c0d",
+          "width": 70,
+          "height": 100,
+          "original_size": null
+        },
+        {
+          "type": "thumb150x210",
+          "url": "https://images1.vinted.net/t/03_024d9_w2j5AraJr5Q14kAHRwG8HLHg/150x210/1789490354.jpeg?s=4d8b0e44889aa9d5edee5f383bd16c4855e2e69d",
+          "width": 150,
+          "height": 210,
+          "original_size": null
+        },
+        {
+          "type": "thumb310x430",
+          "url": "https://images1.vinted.net/t/03_024d9_w2j5AraJr5Q14kAHRwG8HLHg/310x430/1789490354.jpeg?s=0b5795ec6064ec0c4b20b94477ff2b07cf3d6041",
+          "width": 310,
+          "height": 430,
+          "original_size": null
+        },
+        {
+          "type": "thumb428x624",
+          "url": "https://images1.vinted.net/t/03_024d9_w2j5AraJr5Q14kAHRwG8HLHg/f800/1789490354.jpeg?s=b2b00e9b6a0509e084724006661485af038021a5",
+          "width": 321,
+          "height": 428,
+          "original_size": true
+        },
+        {
+          "type": "thumb624x428",
+          "url": "https://images1.vinted.net/t/03_024d9_w2j5AraJr5Q14kAHRwG8HLHg/f800/1789490354.jpeg?s=b2b00e9b6a0509e084724006661485af038021a5",
+          "width": 468,
+          "height": 624,
+          "original_size": true
+        },
+        {
+          "type": "thumb364x428",
+          "url": "https://images1.vinted.net/t/03_024d9_w2j5AraJr5Q14kAHRwG8HLHg/f800/1789490354.jpeg?s=b2b00e9b6a0509e084724006661485af038021a5",
+          "width": 273,
+          "height": 364,
+          "original_size": true
+        }
+      ],
+      "high_resolution": {
+        "id": "03_024d9_w2j5AraJr5Q14kAHRwG8HLHg",
+        "timestamp": 1789490354,
+        "orientation": null
+      },
+      "is_suspicious": false,
+      "full_size_url": "https://images1.vinted.net/tc/03_024d9_w2j5AraJr5Q14kAHRwG8HLHg/1789490354.jpeg?s=5715605ccc069e6d7836000b44edf705efb3d2f7",
+      "is_hidden": false,
+      "extra": {}
+    },
+    {
+      "id": 42402552714,
+      "image_no": 2,
+      "width": 600,
+      "height": 800,
+      "dominant_color": "#272829",
+      "dominant_color_opaque": "#BEBFBF",
+      "url": "https://images1.vinted.net/t/02_012b4_bz1euUAZZZFaZb52J9E9f5wP/f800/1789490354.jpeg?s=83ae1798811a5b346b3d2892584b509280cc78eb",
+      "is_main": false,
+      "thumbnails": [
+        {
+          "type": "thumb70x100",
+          "url": "https://images1.vinted.net/t/02_012b4_bz1euUAZZZFaZb52J9E9f5wP/70x100/1789490354.jpeg?s=abccaeb8a5b34bce969fc43a3f3643d21a5d6956",
+          "width": 70,
+          "height": 100,
+          "original_size": null
+        },
+        {
+          "type": "thumb150x210",
+          "url": "https://images1.vinted.net/t/02_012b4_bz1euUAZZZFaZb52J9E9f5wP/150x210/1789490354.jpeg?s=f1de1e095bd74edb4a68f49c201acf00532c53d0",
+          "width": 150,
+          "height": 210,
+          "original_size": null
+        },
+        {
+          "type": "thumb310x430",
+          "url": "https://images1.vinted.net/t/02_012b4_bz1euUAZZZFaZb52J9E9f5wP/310x430/1789490354.jpeg?s=b5a25363af7a1889a4990165f2d2f8a4b3acf0f6",
+          "width": 310,
+          "height": 430,
+          "original_size": null
+        },
+        {
+          "type": "thumb428x624",
+          "url": "https://images1.vinted.net/t/02_012b4_bz1euUAZZZFaZb52J9E9f5wP/f800/1789490354.jpeg?s=83ae1798811a5b346b3d2892584b509280cc78eb",
+          "width": 321,
+          "height": 428,
+          "original_size": true
+        },
+        {
+          "type": "thumb624x428",
+          "url": "https://images1.vinted.net/t/02_012b4_bz1euUAZZZFaZb52J9E9f5wP/f800/1789490354.jpeg?s=83ae1798811a5b346b3d2892584b509280cc78eb",
+          "width": 468,
+          "height": 624,
+          "original_size": true
+        },
+        {
+          "type": "thumb364x428",
+          "url": "https://images1.vinted.net/t/02_012b4_bz1euUAZZZFaZb52J9E9f5wP/f800/1789490354.jpeg?s=83ae1798811a5b346b3d2892584b509280cc78eb",
+          "width": 273,
+          "height": 364,
+          "original_size": true
+        }
+      ],
+      "high_resolution": {
+        "id": "02_012b4_bz1euUAZZZFaZb52J9E9f5wP",
+        "timestamp": 1789490354,
+        "orientation": null
+      },
+      "is_suspicious": false,
+      "full_size_url": "https://images1.vinted.net/tc/02_012b4_bz1euUAZZZFaZb52J9E9f5wP/1789490354.jpeg?s=d8fc96bff525b9cd8b6ab95933d8f50383fb20fa",
+      "is_hidden": false,
+      "extra": {}
+    }
+  ],
+  "is_heavy_bulky": false,
+  "brand": "Nike",
+  "size": "S",
+  "status": "Muito bom",
+  "item_box": {
+    "first_line": "Nike",
+    "second_line": "S · Muito bom",
+    "exposures": [],
+    "ff_exposures": [],
+    "accessibility_label": "Sudadera Nike, marca: Nike, estado: Muito bom, tamanho: S, €8.00, €9.10 inclui Proteção do Comprador ",
+    "item_id": 10013561214
+  },
+  "url": "https://www.vinted.pt/items/10013561214-sudadera-nike",
+  "item_alert_type": null,
+  "promoted": false,
+  "can_push_up": false,
+  "can_edit": false,
+  "stats_visible": false,
+  "view_count": 0,
+  "push_up": {},
+  "item_closing_action": null
+}

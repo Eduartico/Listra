@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Vinted Listing Backup</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <h1>Vinted Listing Backup</h1>
+
+    <p class="status">
+      <span class="badge" data-el="status">idle</span>
+      <span class="count" data-el="count"></span>
+    </p>
+
+    <div class="bar"><div class="bar__fill" data-el="fill"></div></div>
+    <p class="current" data-el="current"></p>
+    <p class="timing" data-el="timing"></p>
+
+    <button type="button" class="btn btn--primary" data-el="open">
+      Open backup manager
+    </button>
+    <button type="button" class="btn" data-el="cancel" disabled>Cancel backup</button>
+
+    <p class="hint">
+      The manager runs in its own tab because picking a folder and writing to it needs
+      a real page. Everything stays on this computer.
+    </p>
+
+    <script src="../common/constants.js"></script>
+    <script src="../common/messages.js"></script>
+    <script src="../common/logger.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

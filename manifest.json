@@ -1,0 +1,84 @@
+{
+  "manifest_version": 3,
+  "name": "Vinted Listing Backup",
+  "version": "1.0.0",
+  "description": "Backup your Vinted listings — metadata and full-resolution photos — to a folder on your own computer.",
+  "minimum_chrome_version": "116",
+
+  "permissions": [
+    "storage",
+    "downloads",
+    "notifications"
+  ],
+
+  "host_permissions": [
+    "https://www.vinted.fr/*",
+    "https://www.vinted.es/*",
+    "https://www.vinted.de/*",
+    "https://www.vinted.it/*",
+    "https://www.vinted.pt/*",
+    "https://www.vinted.pl/*",
+    "https://www.vinted.co.uk/*",
+    "https://www.vinted.nl/*",
+    "https://www.vinted.be/*",
+    "https://www.vinted.lt/*",
+    "https://www.vinted.cz/*",
+    "https://www.vinted.at/*",
+    "https://*.vinted.net/*",
+    "https://*.vinted.com/*"
+  ],
+
+  "background": {
+    "service_worker": "src/background/service-worker.js"
+  },
+
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_title": "Vinted Listing Backup",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.vinted.fr/*",
+        "https://www.vinted.es/*",
+        "https://www.vinted.de/*",
+        "https://www.vinted.it/*",
+        "https://www.vinted.pt/*",
+        "https://www.vinted.pl/*",
+        "https://www.vinted.co.uk/*",
+        "https://www.vinted.nl/*",
+        "https://www.vinted.be/*",
+        "https://www.vinted.lt/*",
+        "https://www.vinted.cz/*",
+        "https://www.vinted.at/*"
+      ],
+      "js": [
+        "src/common/constants.js",
+        "src/common/messages.js",
+        "src/common/logger.js",
+        "src/common/selectors.js",
+        "src/common/sanitize.js",
+        "src/common/rate-limiter.js",
+        "src/common/page-data.js",
+        "src/common/normalize.js",
+        "src/content/dom-extractor.js",
+        "src/content/content-script.js"
+      ],
+      "css": ["src/content/content-styles.css"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ]
+}

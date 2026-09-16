@@ -1,0 +1,73 @@
+/*
+ * Styles injected into Vinted pages.
+ *
+ * Every rule is namespaced under .vb- and every property is declared longhand so
+ * nothing here can leak into Vinted's own layout. High z-index per spec, and a
+ * font stack that does not depend on Vinted having loaded its own.
+ */
+
+.vb-fab {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 99999;
+  padding: 12px 18px;
+  border: 0;
+  border-radius: 999px;
+  background: #09b1ba;
+  color: #fff;
+  font: 600 14px/1.2 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+}
+
+.vb-fab:hover:not(:disabled) { background: #078d94; }
+.vb-fab:disabled { opacity: 0.6; cursor: default; }
+
+.vb-overlay {
+  position: fixed;
+  right: 20px;
+  bottom: 76px;
+  z-index: 99999;
+  width: 300px;
+  padding: 14px;
+  border-radius: 12px;
+  background: #101418;
+  color: #f3f5f7;
+  font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+
+.vb-overlay__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.vb-overlay__title { font-weight: 600; }
+.vb-overlay__count { color: #9fb0bd; font-variant-numeric: tabular-nums; }
+
+.vb-overlay__bar {
+  height: 6px;
+  border-radius: 999px;
+  background: #27313a;
+  overflow: hidden;
+}
+
+.vb-overlay__fill {
+  height: 100%;
+  width: 0;
+  background: #09b1ba;
+  transition: width 220ms ease;
+}
+
+.vb-overlay__current {
+  margin-top: 8px;
+  /* Long listing titles must not stretch the panel. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vb-overlay__meta { margin-top: 4px; color: #9fb0bd; }

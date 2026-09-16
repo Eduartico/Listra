@@ -1,0 +1,5 @@
+# Local-only material: test credentials, captured traffic, scratch backups.
+local/
+# Backups produced while testing the extension against a real profile.
+VintedBackup*/
+*.zip
