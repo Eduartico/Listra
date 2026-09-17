@@ -54,6 +54,7 @@
       step: batch && batch.current && batch.current.relist ? batch.current.relist.step || null : null,
       captchaUrl: null,
       error: null,
+      newIds: batch ? batch.newIds : [],
       at: Date.now(),
       ...(extra || {}),
     };
@@ -269,7 +270,7 @@
     el.humanCheckRow.hidden = true;
     el.relistCancel.disabled = false;
     remaining = ids.slice();
-    batch = { ids: ids.slice(), done: 0, failed: 0, current: null };
+    batch = { ids: ids.slice(), done: 0, failed: 0, current: null, newIds: [] };
     M.render();
     publishProgress({ status: 'running' });
 
@@ -291,6 +292,7 @@
         if (res.ok) {
           done += 1;
           batch.done = done;
+          if (res.value && res.value.newId != null) batch.newIds.push(String(res.value.newId));
           remaining.shift();
           publishProgress({ status: 'running' });
         } else {

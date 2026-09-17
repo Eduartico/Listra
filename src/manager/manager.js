@@ -933,8 +933,10 @@
   }
 
   (async function boot() {
-    if (await yieldToExistingManager()) return;
+    // bind() must run synchronously: grid.js, relist.js and export-downloads.js
+    // are evaluated right after this file and wire their buttons through `el`.
     bind();
+    if (await yieldToExistingManager()) return;
     await VB.log.hydrate();
     await loadCheckpoint();
 

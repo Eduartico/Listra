@@ -305,14 +305,22 @@
 
     q('current').textContent = p.summary || '';
     if (p.status === 'done') {
+      const newIds = Array.isArray(p.newIds) ? p.newIds : [];
       q('title').textContent = p.failed ? 'Relist finished with errors' : 'Relist done';
-      q('meta').textContent = p.error || '';
-      if (p.failed) {
-        actions.appendChild(overlayButton('Open Listra', () => send({ type: MSG.OPEN_MANAGER })));
-        actions.hidden = false;
-      } else {
-        overlayHideTimer = setTimeout(() => renderRelistOverlay(null), 10000);
+      q('meta').textContent = p.error
+        ? p.error
+        : newIds.length === 1
+          ? 'Recreated as listing #' + newIds[0]
+          : newIds.length > 1
+            ? 'Recreated as ' + newIds.length + ' new listings'
+            : '';
+      if (newIds.length === 1) {
+        actions.appendChild(overlayButton('Open new listing', () => { location.href = C.site.domain + '/items/' + newIds[0]; }, true));
       }
+      if (p.failed) actions.appendChild(overlayButton('Open Listra', () => send({ type: MSG.OPEN_MANAGER })));
+      actions.appendChild(overlayButton('Dismiss', () => renderRelistOverlay(null)));
+      actions.hidden = false;
+      if (!p.failed) overlayHideTimer = setTimeout(() => renderRelistOverlay(null), 30000);
     } else if (p.status === 'human-check') {
       q('title').textContent = 'Vinted wants a human check';
       q('meta').textContent = 'Complete it, then press Retry.';
@@ -403,7 +411,8 @@
    * @returns {{button: HTMLButtonElement, setLabel: (text: string) => void}}
    */
   function buildInlineButton(label) {
-    const template = VB.SELECTORS.item.ownerActionButtons
+    const template = [VB.SELECTORS.item.ownerActionTemplate]
+      .concat(VB.SELECTORS.item.ownerActionButtons)
       .map((sel) => document.querySelector(sel))
       .find((n) => n && n.tagName === 'BUTTON');
     const button = document.createElement('button');

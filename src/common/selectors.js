@@ -56,11 +56,13 @@
        * the container of the first one found; with none, it floats.
        */
       ownerActionButtons: [
-        '[data-testid="item-edit-button"]',
         '[data-testid="item-bump-button"]',
+        '[data-testid="item-edit-button"]',
         '[data-testid="mark-as-sold-button"]',
         '[data-testid="item-delete-button"]',
       ],
+      /** The filled ("Destacar") button is the look the Relist button copies. */
+      ownerActionTemplate: '[data-testid="item-bump-button"]',
     },
 
     /** Signatures inside the page's embedded data. See page-data.js. */
