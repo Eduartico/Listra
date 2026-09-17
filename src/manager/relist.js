@@ -170,7 +170,11 @@
       if (cancelRequested) return VB.fail(ERR.CANCELLED, 'Stopped before deleting anything');
       setStep(entry, 'Removing the original listing…');
       const del = await M.proxy({ type: MSG.PROXY_DELETE_ITEM, itemId: entry.id });
-      if (!del.ok) {
+      if (!del.ok && del.status === 404) {
+        // Already gone (deleted on Vinted by hand since the backup): nothing to
+        // remove, and nothing live to clash with the new listing's photos.
+        VB.log.info(SCOPE, 'Original ' + entry.id + ' no longer exists; recreating from the backup');
+      } else if (!del.ok) {
         return VB.fail(
           del.code,
           'Could not delete the original, so nothing was recreated (avoids a duplicate): ' + del.message,

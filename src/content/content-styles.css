@@ -93,26 +93,25 @@
 .vb-btn--primary:hover { background: #078d94; }
 .vb-btn--small { padding: 6px 10px; font-size: 12px; }
 
-/* Relist button placed inline with Vinted's own owner actions (observed: a
- * vertical grid of 36px outlined buttons). Filled where theirs are outlined, so
- * it reads as the one action that is not Vinted's. */
+/* Fallback for the inline Relist button when Vinted's own button markup could
+ * not be copied: approximates their outlined 36px buttons. */
 .vb-inline {
   display: block;
   width: 100%;
   height: 36px;
   margin: 0;
   padding: 0 16px;
-  border: 1px solid #09b1ba;
+  border: 1px solid #007782;
   border-radius: 6px;
-  background: #09b1ba;
-  color: #fff;
+  background: transparent;
+  color: #007782;
   font-family: inherit;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 400;
   line-height: 18px;
   cursor: pointer;
 }
-.vb-inline:hover:not(:disabled) { background: #078d94; border-color: #078d94; }
+.vb-inline:hover:not(:disabled) { background: rgba(0, 119, 130, 0.06); }
 .vb-inline:disabled { opacity: 0.6; cursor: default; }
 
 /* Profile page: the Listra pill and its menu. */

@@ -33,6 +33,15 @@
     GET_ITEM_STATUS: 'GET_ITEM_STATUS',
     /** Manager asking to be brought to the front because it needs the person. */
     NEED_ATTENTION: 'NEED_ATTENTION',
+    /**
+     * A manager page announcing its tab id on load. The worker cannot find
+     * manager tabs by URL (Brave hides extension-page URLs from tabs.query
+     * without the "tabs" permission), so the manager registers itself instead.
+     * Answered with `{ existing: tabId|null }` when another manager is alive.
+     */
+    MANAGER_HELLO: 'MANAGER_HELLO',
+    /** Worker -> manager tab: are you still a manager page? */
+    MANAGER_PING: 'MANAGER_PING',
 
     // --- proxied to a Vinted tab's content script ----------------------------
     /** Readiness probe: is a content script listening in this tab yet? */

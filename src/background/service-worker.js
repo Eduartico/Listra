@@ -148,8 +148,65 @@ importScripts(
     return false;
   }
 
+  // ---------------------------------------------------------------------------
+  // The manager tab
+  //
+  // Observed on Brave: tabs.query({url}) does not match extension pages without
+  // the "tabs" permission (their url is reported as null), so a URL lookup finds
+  // nothing and every request would open one more manager. The manager instead
+  // registers its tab id on load (MANAGER_HELLO) and is pinged before reuse.
+  // ---------------------------------------------------------------------------
+
+  async function storedManagerTabId() {
+    try {
+      const got = await chrome.storage.session.get(STORAGE_KEYS.managerTabId);
+      return got[STORAGE_KEYS.managerTabId] || null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function rememberManagerTab(tabId) {
+    await chrome.storage.session.set({ [STORAGE_KEYS.managerTabId]: tabId }).catch(() => {});
+  }
+
+  /** Whether this tab still holds a manager page that answers. */
+  async function isManagerAlive(tabId) {
+    if (tabId == null) return false;
+    try {
+      const res = await chrome.tabs.sendMessage(tabId, { type: MSG.MANAGER_PING });
+      return !!(res && res.ok);
+    } catch {
+      return false;
+    }
+  }
+
+  /** The live manager tab id, or null. */
+  async function findManagerTab() {
+    const remembered = await storedManagerTabId();
+    if (await isManagerAlive(remembered)) return remembered;
+    // Where the browser does expose extension-page urls, this still works.
+    const byUrl = await chrome.tabs.query({ url: MANAGER_URL }).catch(() => []);
+    for (const t of byUrl) {
+      if (await isManagerAlive(t.id)) {
+        await rememberManagerTab(t.id);
+        return t.id;
+      }
+    }
+    return null;
+  }
+
+  async function focusTab(tabId) {
+    try {
+      const tab = await chrome.tabs.update(tabId, { active: true });
+      if (tab) await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
+    } catch {
+      /* gone */
+    }
+  }
+
   /**
-   * Open the manager tab, or reuse the open one.
+   * Open the manager tab, or reuse the live one.
    *
    * `active: true` (the default) brings it to the front, which is what a click on
    * the toolbar or the Backup button wants. The in-page Relist actions pass
@@ -162,15 +219,13 @@ importScripts(
    */
   async function openManagerTab(opts) {
     const active = !opts || opts.active !== false;
-    const existing = await chrome.tabs.query({ url: MANAGER_URL });
-    if (existing.length) {
-      if (active) {
-        await chrome.tabs.update(existing[0].id, { active: true });
-        await chrome.windows.update(existing[0].windowId, { focused: true }).catch(() => {});
-      }
-      return { tabId: existing[0].id, created: false };
+    const existing = await findManagerTab();
+    if (existing != null) {
+      if (active) await focusTab(existing);
+      return { tabId: existing, created: false };
     }
     const tab = await chrome.tabs.create({ url: MANAGER_URL, active });
+    await rememberManagerTab(tab.id);
     return { tabId: tab.id, created: true };
   }
 
@@ -222,10 +277,9 @@ importScripts(
   }
 
   async function sendToManager(message) {
-    const tabs = await chrome.tabs.query({ url: MANAGER_URL });
-    await Promise.all(
-      tabs.map((t) => chrome.tabs.sendMessage(t.id, message).catch(() => {}))
-    );
+    const tabId = await findManagerTab();
+    if (tabId == null) return;
+    await chrome.tabs.sendMessage(tabId, message).catch(() => {});
   }
 
   // ---------------------------------------------------------------------------
@@ -356,6 +410,21 @@ importScripts(
         }, sendResponse);
         return true;
 
+      case MSG.MANAGER_HELLO: {
+        // A manager page just loaded. If another one is already alive, tell the
+        // new one so it can hand over and close; otherwise it becomes the one.
+        const tabId = message.tabId;
+        guarded(async () => {
+          const current = await storedManagerTabId();
+          if (current != null && current !== tabId && (await isManagerAlive(current))) {
+            return VB.done({ existing: current });
+          }
+          if (tabId != null) await rememberManagerTab(tabId);
+          return VB.done({ existing: null });
+        }, sendResponse);
+        return true;
+      }
+
       case MSG.RELIST_PROGRESS:
         guarded(async () => VB.done(await relayRelistProgress(message.progress)), sendResponse);
         return true;
@@ -415,6 +484,9 @@ importScripts(
     if (remembered === tabId) {
       await chrome.storage.session.remove(STORAGE_KEYS.proxyTabId).catch(() => {});
       VB.log.info(SCOPE, 'Proxy tab closed; will re-resolve on next request');
+    }
+    if ((await storedManagerTabId()) === tabId) {
+      await chrome.storage.session.remove(STORAGE_KEYS.managerTabId).catch(() => {});
     }
   });
 

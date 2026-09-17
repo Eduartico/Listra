@@ -830,13 +830,26 @@
     return VB.done({ started: entries.length, added: added.length });
   }
 
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!message || typeof message.type !== 'string') return false;
+    // chrome.runtime.sendMessage from a content script reaches every extension
+    // page as well as the service worker. Relist commands are acted on only when
+    // the worker forwards them (no sender.tab), otherwise a request would run
+    // once per open manager tab plus once more via the worker — observed live as
+    // two parallel relists of the same listing, one of them failing on the
+    // delete the other had just done.
+    const fromWorker = !(sender && sender.tab);
+    if (message.type === MSG.MANAGER_PING) {
+      sendResponse(VB.done(true));
+      return false;
+    }
     if (message.type === MSG.RELIST_ITEMS) {
+      if (!fromWorker) return false;
       sendResponse(acceptRelist(Array.isArray(message.ids) ? message.ids : [], message.context));
       return false;
     }
     if (message.type === MSG.RELIST_RETRY) {
+      if (!fromWorker) return false;
       sendResponse(VB.relist ? VB.relist.retry() : VB.fail(ERR.HTTP, 'Relisting is not loaded'));
       return false;
     }
@@ -899,7 +912,28 @@
     },
   };
 
+  /**
+   * One manager tab at a time. Two of them would both act on forwarded
+   * commands and both run queues against the same storage. The worker keeps
+   * the id of the live manager; if that is not this tab, hand over and close.
+   */
+  async function yieldToExistingManager() {
+    try {
+      const me = await chrome.tabs.getCurrent();
+      if (!me) return false;
+      const res = await chrome.runtime.sendMessage({ type: MSG.MANAGER_HELLO, tabId: me.id });
+      const existing = res && res.ok && res.value ? res.value.existing : null;
+      if (existing == null) return false;
+      if (me.active) await chrome.tabs.update(existing, { active: true }).catch(() => {});
+      await chrome.tabs.remove(me.id);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   (async function boot() {
+    if (await yieldToExistingManager()) return;
     bind();
     await VB.log.hydrate();
     await loadCheckpoint();

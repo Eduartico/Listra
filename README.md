@@ -336,6 +336,10 @@ Brave disables the File System Access API, so on Brave the extension goes straig
 browser storage (IndexedDB) and offers **Export as ZIP**; on Chrome the folder picker is
 available. Also on Brave: an unpacked extension that calls `chrome.runtime.reload()` is
 left disabled until Developer mode is on — reload from `brave://extensions` instead.
+Brave also hides extension-page URLs from `chrome.tabs.query` without the `tabs`
+permission, so the manager tab is found by registration (it reports its tab id to the
+worker on load) rather than by URL; a second manager tab closes itself in favour of
+the first.
 
 ## Tests
 

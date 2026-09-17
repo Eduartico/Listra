@@ -127,6 +127,8 @@
     log: 'vb_log',
     settings: 'vb_settings',
     proxyTabId: 'vb_proxy_tab_id',
+    /** chrome.storage.session: the registered manager tab. */
+    managerTabId: 'vb_manager_tab_id',
     /** Last relist progress payload, so a reloaded Vinted tab can redraw it. */
     relistProgress: 'vb_relist_progress',
     /** A relist request handed to a manager tab that was just opened. */

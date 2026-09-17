@@ -394,6 +394,50 @@
     return null;
   }
 
+  /**
+   * A button that looks exactly like Vinted's own owner buttons: their classes
+   * and inner markup are copied from one of them (icons dropped), so font,
+   * weight, colour and radius match without guessing. Falls back to our own
+   * `.vb-inline` styling when there is nothing to copy.
+   *
+   * @returns {{button: HTMLButtonElement, setLabel: (text: string) => void}}
+   */
+  function buildInlineButton(label) {
+    const template = VB.SELECTORS.item.ownerActionButtons
+      .map((sel) => document.querySelector(sel))
+      .find((n) => n && n.tagName === 'BUTTON');
+    const button = document.createElement('button');
+    button.type = 'button';
+    let labelEl = button;
+    if (template) {
+      button.className = template.className;
+      for (const child of template.childNodes) button.appendChild(child.cloneNode(true));
+      for (const n of button.querySelectorAll('svg, [data-testid]')) {
+        if (n.tagName.toLowerCase() === 'svg') n.remove();
+        else n.removeAttribute('data-testid');
+      }
+      // The deepest element that carried text is where the label goes.
+      let cursor = button;
+      for (;;) {
+        const next = Array.from(cursor.children).find((c) => c.textContent.trim());
+        if (!next) break;
+        cursor = next;
+      }
+      labelEl = cursor;
+      // Empty wrappers left behind by a removed icon add stray spacing.
+      for (const n of Array.from(button.querySelectorAll('*'))) {
+        if (n !== labelEl && !n.contains(labelEl) && !n.textContent.trim()) n.remove();
+      }
+    } else {
+      button.className = 'vb-inline';
+    }
+    const setLabel = (text) => {
+      labelEl.textContent = text;
+    };
+    setLabel(label);
+    return { button, setLabel };
+  }
+
   async function mountItemPage(itemId) {
     const context = await C.buildContext();
     if (!context.signedIn || context.viewerId == null) {
@@ -423,9 +467,19 @@
       .then(() => findOwnerActionsAnchor())
       .catch(() => null);
 
-    const button = h('button', anchor ? 'vb-inline' : 'vb-fab', 'Relist');
-    button.type = 'button';
+    let button;
+    let setLabel;
+    if (anchor) {
+      ({ button, setLabel } = buildInlineButton('Relist'));
+    } else {
+      button = h('button', 'vb-fab', 'Relist');
+      button.type = 'button';
+      setLabel = (text) => {
+        button.textContent = text;
+      };
+    }
     button.dataset.vbMount = 'item';
+    button.dataset.vbRelist = itemId;
     button.title = 'Back up this listing, then put it back on Vinted as a new listing';
 
     const rows = async () => {
@@ -437,7 +491,7 @@
     const reflect = () => {
       const busy = relistRunning();
       button.disabled = busy;
-      button.textContent = busy ? (relistInvolves(itemId) ? 'Relisting…' : 'Busy') : 'Relist';
+      setLabel(busy ? (relistInvolves(itemId) ? 'Relisting…' : 'Busy') : 'Relist');
       refreshPanel(button, rows);
     };
     progressListeners.add(reflect);
@@ -454,7 +508,7 @@
       const go = await confirmModal('Relist “' + title + '”?', lines, 'Relist');
       if (!go) return;
       button.disabled = true;
-      button.textContent = 'Relisting…';
+      setLabel('Relisting…');
       const res = await requestRelist([itemId], ownerContext);
       if (!res.ok) reflect();
     });
@@ -477,7 +531,10 @@
         if (document.body.contains(button)) return;
         const again = findOwnerActionsAnchor();
         if (again) again.appendChild(button);
-        else document.body.appendChild(Object.assign(button, { className: 'vb-fab' }));
+        else {
+          button.className = 'vb-fab';
+          document.body.appendChild(button);
+        }
       }, 500);
     }
   }
