@@ -3,8 +3,9 @@
  *
  * Two jobs.
  *
- * 1. UI on the user's own profile page: a floating button that starts a backup,
- *    and a progress overlay the manager page drives while a run is going.
+ * 1. The progress overlay the manager page drives while a run is going, and the
+ *    Vinted-side helpers (page context, wardrobe listing) that page-actions.js
+ *    builds the on-page buttons and menus on.
  *
  * 2. Request proxy. The manager page orchestrates the backup but lives on a
  *    chrome-extension:// origin, so its fetches would carry an extension `Origin`
@@ -457,8 +458,17 @@
    * @param {number} [limit] stop early; used by the manager's "first N" test run
    * @returns {Promise<{ok: true, value: string[]} | {ok: false, code: string, message: string}>}
    */
-  async function collectViaWardrobe(userId, limit) {
-    const ids = [];
+  /**
+   * Every wardrobe record for a user, newest first, across all pages. Records
+   * are also kept in wardrobeCache so a later PROXY_FETCH_ITEM can reuse them.
+   *
+   * @param {number|string} userId
+   * @param {number|null} [limit] stop once this many records are in hand
+   * @returns {Promise<{ok: true, value: object[]} | {ok: false, code: string, message: string}>}
+   */
+  async function fetchWardrobeRecords(userId, limit) {
+    const records = [];
+    const seen = new Set();
     let page = 1;
     let totalPages = null;
 
@@ -478,14 +488,18 @@
       for (const it of items) {
         if (!it || it.id == null) continue;
         const key = String(it.id);
-        if (!wardrobeCache.has(key)) ids.push(key);
+        // Deduped within this listing only; the cache may hold an earlier run's
+        // records and must not hide ids from a later one.
+        if (seen.has(key)) continue;
+        seen.add(key);
+        records.push(it);
         wardrobeCache.set(key, it);
       }
 
       if (totalPages === null) {
         totalPages = Number(VB.pageData.deepGet(res.value, 'pagination.total_pages')) || null;
       }
-      if (limit && ids.length >= limit) break;
+      if (limit && records.length >= limit) break;
       if (totalPages ? page >= totalPages : items.length < LIMITS.perPage) break;
       page += 1;
       if (page > 200) {
@@ -494,8 +508,14 @@
       }
     }
 
-    VB.log.info(SCOPE, 'Wardrobe listed ' + ids.length + ' items over ' + page + ' page(s)');
-    return VB.done(limit ? ids.slice(0, limit) : ids);
+    VB.log.info(SCOPE, 'Wardrobe listed ' + records.length + ' items over ' + page + ' page(s)');
+    return VB.done(limit ? records.slice(0, limit) : records);
+  }
+
+  async function collectViaWardrobe(userId, limit) {
+    const res = await fetchWardrobeRecords(userId, limit);
+    if (!res.ok) return res;
+    return VB.done(res.value.map((it) => String(it.id)));
   }
 
   /** Fallback collection by crawling the rendered grid with scroll steps. */
@@ -720,39 +740,11 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Injected UI
+  // Injected UI: the backup progress overlay. The buttons and menus live in
+  // page-actions.js, which is loaded after this file.
   // ---------------------------------------------------------------------------
 
   let overlayEl = null;
-
-  function buildFab(context) {
-    const fab = document.createElement('button');
-    fab.className = 'vb-fab';
-    fab.type = 'button';
-    fab.textContent = 'Backup Listings';
-    fab.title = 'Save this profile’s listings to a folder on this computer';
-
-    fab.addEventListener('click', async () => {
-      if (context.isOwnProfile === false) return;
-      if (context.isOwnProfile === null) {
-        const proceed = window.confirm(
-          'This extension could not confirm that this is your own profile.\n\n' +
-            'Continue and back up the listings shown here?'
-        );
-        if (!proceed) return;
-      }
-      fab.disabled = true;
-      fab.textContent = 'Opening manager…';
-      const fresh = await buildContext();
-      chrome.runtime.sendMessage({ type: MSG.START_BACKUP, context: fresh }, () => {
-        fab.disabled = false;
-        fab.textContent = 'Backup Listings';
-      });
-    });
-
-    document.body.appendChild(fab);
-    return fab;
-  }
 
   function ensureOverlay() {
     if (overlayEl && document.body.contains(overlayEl)) return overlayEl;
@@ -871,6 +863,11 @@
         sendResponse({ ok: true });
         return false;
 
+      case MSG.RELIST_PROGRESS:
+        if (VB.pageActions) VB.pageActions.onRelistProgress(message.progress);
+        sendResponse({ ok: true });
+        return false;
+
       default:
         return false;
     }
@@ -880,33 +877,25 @@
   // Boot
   // ---------------------------------------------------------------------------
 
+  /** What page-actions.js needs from this file. */
+  VB.content = {
+    site,
+    apiGet,
+    buildContext,
+    fetchWardrobeRecords,
+    profileFromUrl,
+    onProfilePage,
+    signedIn,
+    dismissCookieBanner,
+    renderOverlay,
+  };
+
   (async function boot() {
     dismissCookieBanner();
-    if (!onProfilePage()) {
-      VB.log.info(SCOPE, 'Loaded as request proxy on ' + site.region);
-      return;
-    }
+    VB.log.info(SCOPE, 'Loaded on ' + site.region + ' ' + location.pathname);
 
-    // The grid hydrates after first paint; waiting for it keeps the button from
-    // appearing before the page it acts on exists.
-    await VB.domExtractor.waitForSelector(VB.SELECTORS.profile.listingCards, 5000);
-    dismissCookieBanner();
-
-    const context = await buildContext();
-    VB.log.info(SCOPE, 'Profile page context', context);
-
-    if (!context.signedIn) {
-      VB.log.info(SCOPE, 'Not signed in, no button injected');
-      return;
-    }
-    if (context.isOwnProfile === false) {
-      VB.log.info(SCOPE, 'Someone else’s profile, no button injected');
-      return;
-    }
-    buildFab(context);
-
-    // Restore the overlay if a run is already in flight and the user came back to
-    // this tab.
+    // Restore the backup overlay if a run is already in flight and the user came
+    // back to this tab.
     const state = await chrome.runtime.sendMessage({ type: MSG.GET_STATE }).catch(() => null);
     if (state && state.ok && state.value && state.value.status === 'running') {
       renderOverlay(state.value.progress);

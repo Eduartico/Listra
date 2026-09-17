@@ -10,15 +10,35 @@ straight to disk.
 
 ## Install
 
-1. Clone or download this folder.
-2. Open `chrome://extensions` (`brave://extensions` on Brave), turn on **Developer mode**.
-3. **Load unpacked**, and select this folder (the one containing `manifest.json`).
+No build step, no `npm install`: the repository folder *is* the extension.
+
+1. Clone or download this folder somewhere it can stay, e.g. `E:\Repos\Listra`.
+   Do not move or delete it afterwards; the browser loads it from there every start.
+2. Open `brave://extensions` (`chrome://extensions` on Chrome) and turn on
+   **Developer mode** (top right).
+3. **Load unpacked** and select the folder that contains `manifest.json`.
+4. Click the puzzle-piece icon in the toolbar and **pin** Listra, so the popup is
+   one click away.
+
+To update: pull the new version into the same folder, then press the reload arrow
+on Listra's card in `brave://extensions`. Open Vinted tabs pick up the new content
+script after a page reload.
 
 An unpacked extension is loaded into one browser profile only. If you loaded it in
 a test profile and do not see it in your everyday browser, load it there too — same
-three steps.
+steps.
 
-No build step, no `npm install`. The extension ships the files it runs.
+Things to know for daily use on Brave:
+
+- Brave has no folder picker, so backups live in the extension's own browser
+  storage. **Removing the extension deletes them.** After a backup run you care
+  about, press **Save to Downloads folder** (real files under `Downloads/Listra`)
+  or **Export as ZIP**.
+- If Listra's pages come up light although Brave is dark, use the **System / Light
+  / Dark** switch in the manager header or the popup. Brave does not always pass
+  its colour setting on to extension pages.
+- Some Brave versions show a "disable developer mode extensions" prompt on start.
+  Dismiss it; nothing is wrong.
 
 Icons are derived from `icons/Listra Logo.jfif` by `tools\icons-from-logo.ps1`
 (Windows, uses the built-in .NET imaging). `node tools/make-icons.js` draws
@@ -26,15 +46,37 @@ placeholder icons in code on any platform.
 
 ## Use
 
-1. Sign in to Vinted and open your own profile (`/member/<id>-<your-username>`).
-2. Click the **Backup Listings** button at the bottom right of the page. Listra opens
-   in its own tab and, if a destination is already set, starts backing up.
-3. On Chrome, click **Choose backup folder** first and pick where the backup goes.
-   On Brave there is no folder picker (see below); the backup goes into browser
-   storage and starts right away.
-4. When it finishes, click **Validate backup**.
+Everything can be started from Vinted itself; the manager tab is where the backup
+lives and where the full grid, log and settings are.
 
-The page follows your operating system's light or dark theme.
+**On your own profile page** (`/member/<id>-<your-username>`) a **Listra ▾** pill
+sits at the bottom right. Hover it for the last backup and anything running now;
+click it for the menu:
+
+- **Backup all listings** — opens the manager and, if a destination is already
+  set, starts backing up. On Chrome, click **Choose backup folder** first; on
+  Brave the backup goes into browser storage and starts right away.
+- **Relist all active (N)** — after a confirmation, every live listing is backed
+  up, deleted and recreated from the backup, one at a time (see *Relisting*).
+  The manager does the work in a background tab; progress shows on the Vinted
+  page.
+- **Open Listra** — the manager tab.
+
+**On one of your own item pages** a **Relist** button appears (next to Vinted's
+own Edit/Bump actions when Listra finds them, floating at the bottom right
+otherwise). Hover it for the backup date, whether the listing is live, and the
+last relist result. Click it to relist that one listing; the manager stays in the
+background and progress shows on the page. When it finishes, the panel shows the
+new listing's id.
+
+If Vinted asks for a human check mid-way, the on-page panel offers **Open check**
+and, once you have done it, **Retry**. If the manager needs a decision from you
+(no backup destination yet), it brings its tab to the front.
+
+When a backup finishes, click **Validate backup** in the manager.
+
+Theme: the pages follow your operating system by default; the **System / Light /
+Dark** switch (manager header, popup) overrides that and is remembered.
 
 ### Where the backup is
 
@@ -91,7 +133,7 @@ Progress shows in the manager tab, on the Vinted page, and in the toolbar popup.
 can close the manager tab mid-run: reopening it and pressing Start continues from
 where it stopped rather than starting over.
 
-Clicking the **Backup Listings** button on the Vinted page again after a run has
+Choosing **Backup all listings** on the Vinted page again after a run has
 already finished starts a fresh full backup rather than skipping what is already
 there — there is no incremental "only fetch what changed" mode. Re-running overwrites
 each listing's folder in place, so a completed backup is always safe to redo.
@@ -238,7 +280,10 @@ src/common/      shared by all three contexts
   rate-limiter.js    token bucket
   page-data.js       reads the page’s embedded Next.js payload (App Router RSC stream)
   normalize.js       raw Vinted item -> the schema above
-src/content/     content script, DOM fallback, injected styles
+  relist-body.js     the create-listing request body from a backup
+  relist-plan.js     which wardrobe records are active; queue entries for a relist request
+  theme.js           System / Light / Dark preference, applied as data-theme
+src/content/     content script (proxy + backup overlay), page-actions.js (on-page buttons, menus, panels), DOM fallback, injected styles
 src/background/  service worker
 src/manager/     orchestrator page, grid, relist, both storage backends, images, validation, Downloads export
 src/popup/       toolbar popup
@@ -298,15 +343,16 @@ left disabled until Developer mode is on — reload from `brave://extensions` in
 node tests/run.js
 ```
 
-212 assertions, no dependencies. It evaluates the shipped modules in-process and
+236 assertions, no dependencies. It evaluates the shipped modules in-process and
 covers region detection across all twelve domains, profile-URL detection, folder-name
 safety (accents, length, Windows device names, collisions), price and timestamp
 normalization, the RSC flight reader against a fixture built from a captured live
 page (including reference resolution), a captured wardrobe record, tolerance of
 renamed fields, the folder backend's overwrite behaviour against a small in-memory
 fake of the File System Access API, the relist body builder and its condition,
-colour and human-check parsers, the rate limiter's real timing, and the ZIP
-writer's CRC.
+colour and human-check parsers, theme resolution, item-page URL detection, the
+active-listing filter and relist queue planning, the rate limiter's real timing,
+and the ZIP writer's CRC.
 
 Fixtures under `tests/fixtures/` that came from live captures are anonymized.
 

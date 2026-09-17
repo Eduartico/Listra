@@ -77,6 +77,8 @@
     refresh();
   });
 
+  VB.theme.bindControl(el.theme);
+
   refresh();
   // Cheap poll while the popup is open; it is torn down on close so this stops
   // itself without any cleanup.

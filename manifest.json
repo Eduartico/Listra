@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Listra",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Back up your Vinted listings — metadata and full-resolution photos — to your own computer, and relist them in one click.",
   "minimum_chrome_version": "116",
   "permissions": [
@@ -68,8 +68,10 @@
         "src/common/page-data.js",
         "src/common/normalize.js",
         "src/common/relist-body.js",
+        "src/common/relist-plan.js",
         "src/content/dom-extractor.js",
-        "src/content/content-script.js"
+        "src/content/content-script.js",
+        "src/content/page-actions.js"
       ],
       "css": [
         "src/content/content-styles.css"

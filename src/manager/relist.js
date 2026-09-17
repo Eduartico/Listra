@@ -23,7 +23,7 @@
   const M = VB.manager;
   const { el } = M;
   const { MSG, ERR } = VB;
-  const { RELIST } = VB.constants;
+  const { RELIST, STORAGE_KEYS } = VB.constants;
   const SCOPE = 'relist';
 
   let busy = false;
@@ -32,7 +32,35 @@
   let remaining = [];
   let lastCaptchaUrl = null;
 
+  /** The batch in flight, for progress reports: ids, counts, current entry. */
+  let batch = null;
+
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  /**
+   * Tell the Vinted tab that asked (via the service worker) how the relist is
+   * going, and keep the last report so a reloaded tab can redraw it. Best
+   * effort: the tab may be gone.
+   */
+  function publishProgress(extra) {
+    const p = {
+      status: 'idle',
+      ids: batch ? batch.ids : [],
+      total: batch ? batch.ids.length : 0,
+      completed: batch ? batch.done : 0,
+      failed: batch ? batch.failed : 0,
+      currentId: batch && batch.current ? batch.current.id : null,
+      currentTitle: batch && batch.current ? batch.current.title || batch.current.id : null,
+      step: batch && batch.current && batch.current.relist ? batch.current.relist.step || null : null,
+      captchaUrl: null,
+      error: null,
+      at: Date.now(),
+      ...(extra || {}),
+    };
+    chrome.storage.local.set({ [STORAGE_KEYS.relistProgress]: p }).catch(() => {});
+    chrome.runtime.sendMessage({ type: MSG.RELIST_PROGRESS, progress: p }).catch(() => {});
+    return p;
+  }
 
   async function blobToBase64(blob) {
     const bytes = new Uint8Array(await blob.arrayBuffer());
@@ -47,6 +75,7 @@
   function setStep(entry, step) {
     entry.relist = { ...(entry.relist || {}), status: 'running', step };
     M.render();
+    publishProgress({ status: 'running' });
   }
 
   function setStatus(text) {
@@ -236,10 +265,13 @@
     el.humanCheckRow.hidden = true;
     el.relistCancel.disabled = false;
     remaining = ids.slice();
+    batch = { ids: ids.slice(), done: 0, failed: 0, current: null };
     M.render();
+    publishProgress({ status: 'running' });
 
     const state = M.getState();
     let done = 0;
+    let stopCode = null;
     try {
       while (remaining.length) {
         if (cancelRequested) break;
@@ -249,12 +281,16 @@
           remaining.shift();
           continue;
         }
+        batch.current = entry;
         setStatus('Relisting ' + (entry.title || id) + ' (' + (done + 1) + ' of ' + ids.length + ')');
         const res = await relistOne(entry);
         if (res.ok) {
           done += 1;
+          batch.done = done;
           remaining.shift();
+          publishProgress({ status: 'running' });
         } else {
+          batch.failed += 1;
           entry.relist = {
             ...(entry.relist || {}),
             status: 'failed',
@@ -270,6 +306,7 @@
           }
           if (res.code === ERR.HUMAN_CHECK || res.code === ERR.RATE_LIMITED || res.code === ERR.CANCELLED) {
             lastCaptchaUrl = res.captchaUrl || null;
+            stopCode = res.code;
             if (res.code === ERR.HUMAN_CHECK) {
               M.setNotice('Vinted asked for a human check. Open it, complete it, then press Retry.', 'warn');
               el.humanCheckRow.hidden = false;
@@ -291,13 +328,28 @@
     } finally {
       busy = false;
       el.relistCancel.disabled = true;
-      setStatus(
-        cancelRequested
-          ? 'Stopped after ' + done + ' of ' + ids.length + '.'
-          : remaining.length
-            ? done + ' of ' + ids.length + ' relisted; ' + remaining.length + ' waiting for Retry.'
-            : done + ' of ' + ids.length + ' relisted.'
-      );
+      const summary = cancelRequested
+        ? 'Stopped after ' + done + ' of ' + ids.length + '.'
+        : remaining.length
+          ? done + ' of ' + ids.length + ' relisted; ' + remaining.length + ' waiting for Retry.'
+          : done + ' of ' + ids.length + ' relisted.';
+      setStatus(summary);
+      // The page overlay: done, or stopped and waiting for a Retry from there.
+      const lastError = batch.current && batch.current.relist && batch.current.relist.status === 'failed'
+        ? batch.current.relist.error
+        : null;
+      const delivered = publishProgress({
+        status: stopCode === ERR.HUMAN_CHECK ? 'human-check'
+          : stopCode === ERR.RATE_LIMITED ? 'rate-limited'
+          : cancelRequested ? 'cancelled'
+          : 'done',
+        step: null,
+        captchaUrl: lastCaptchaUrl,
+        error: lastError,
+        summary,
+      });
+      void delivered;
+      batch = null;
       M.render();
     }
   }
@@ -351,11 +403,28 @@
   el.openHumanCheck.addEventListener('click', () => {
     if (lastCaptchaUrl) window.open(lastCaptchaUrl, '_blank', 'noopener');
   });
-  el.relistRetry.addEventListener('click', () => {
-    if (busy || !remaining.length) return;
+  function retry() {
+    if (busy) return VB.fail(ERR.BUSY, 'A relist is already running.');
+    if (!remaining.length) return VB.fail(ERR.SHAPE, 'Nothing is waiting for a retry.');
     el.humanCheckRow.hidden = true;
     runBatch(remaining.slice());
-  });
+    return VB.done(true);
+  }
 
-  VB.relist = { relistMany, isBusy: () => busy };
+  el.relistRetry.addEventListener('click', retry);
+
+  /**
+   * Relist ids on behalf of a Vinted page that already confirmed. Same batch as
+   * the grid's Relist, without the manager's own dialog. Ids already in the
+   * batch or that are the pending retry set are simply run again.
+   */
+  function relistFromPage(ids) {
+    if (busy) return VB.fail(ERR.BUSY, 'A relist is already running.');
+    if (M.isRunning()) return VB.fail(ERR.BUSY, 'A backup is running.');
+    VB.log.info(SCOPE, 'Relist requested from a Vinted page for ' + ids.length + ' listing(s)', ids);
+    runBatch(ids.slice());
+    return VB.done(true);
+  }
+
+  VB.relist = { relistMany, relistFromPage, retry, publishProgress, isBusy: () => busy };
 })();

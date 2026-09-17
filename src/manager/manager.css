@@ -1,13 +1,14 @@
 /*
  * Manager page styling.
  *
- * Plain CSS, one file, no framework. Colours are tokens on :root; the dark set
- * takes over under prefers-color-scheme: dark, so the page follows the operating
- * system's theme with no toggle to maintain.
+ * Plain CSS, one file, no framework. Colours are tokens on :root. The dark set
+ * takes over under prefers-color-scheme: dark unless <html data-theme="light">,
+ * and always under <html data-theme="dark">; theme.js sets that attribute from
+ * the stored preference (System / Light / Dark in the header).
  */
 
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   --bg: #f4f6f8;
   --panel: #ffffff;
   --panel-2: #f0f3f6;
@@ -28,7 +29,8 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --bg: #0f1418;
     --panel: #171d23;
     --panel-2: #1f262e;
@@ -47,6 +49,27 @@
     --log-bg: #0a0e12;
     --log-ink: #cfd8e0;
   }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f1418;
+  --panel: #171d23;
+  --panel-2: #1f262e;
+  --ink: #e7ecf1;
+  --ink-soft: #97a4b1;
+  --line: #2a333d;
+  --brand: #17c0c9;
+  --brand-dark: #0fa7b0;
+  --brand-ink: #062225;
+  --ok: #4ccf8e;
+  --warn: #f0b94a;
+  --warn-bg: #2b2410;
+  --error: #ff7b72;
+  --error-bg: #3a1a18;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --log-bg: #0a0e12;
+  --log-ink: #cfd8e0;
 }
 
 * { box-sizing: border-box; }
@@ -68,6 +91,29 @@ body {
   margin-bottom: 16px;
 }
 .head__logo { border-radius: 9px; }
+.head__text { flex: 1; }
+
+/* System / Light / Dark segmented control. */
+.theme {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+}
+.theme__opt {
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.theme__opt:hover { color: var(--ink); }
+.theme__opt[aria-pressed="true"] { background: var(--brand); color: var(--brand-ink); }
 .head h1 { margin: 0; font-size: 22px; letter-spacing: -0.01em; }
 .sub { margin: 2px 0 0; color: var(--ink-soft); }
 

@@ -46,6 +46,23 @@
       itemIdInHref: /\/items\/(\d+)(?:-|$|[?#])/,
     },
 
+    item: {
+      /** Matches "/items/123456789-some-slug" and "/items/123456789"; captures the id. */
+      itemInUrl: /^\/items\/(\d+)(?:-[^/?#]*)?\/?$/,
+      /**
+       * The owner's own action buttons on an item page (observed on vinted.pt,
+       * 2026-09-17: bump, mark-as-sold, mark-as-reserved, hide, edit, delete, all
+       * siblings in one `.u-grid` container). The Relist button is appended to
+       * the container of the first one found; with none, it floats.
+       */
+      ownerActionButtons: [
+        '[data-testid="item-edit-button"]',
+        '[data-testid="item-bump-button"]',
+        '[data-testid="mark-as-sold-button"]',
+        '[data-testid="item-delete-button"]',
+      ],
+    },
+
     /** Signatures inside the page's embedded data. See page-data.js. */
     pageData: {
       /** Legacy Pages Router block; not present on the App Router (observed). */

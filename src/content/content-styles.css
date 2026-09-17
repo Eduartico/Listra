@@ -71,3 +71,139 @@
 }
 
 .vb-overlay__meta { margin-top: 4px; color: #9fb0bd; }
+
+.vb-overlay__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/* Buttons used inside the overlay and the confirm modal. */
+.vb-btn {
+  padding: 8px 14px;
+  border: 1px solid #3a4652;
+  border-radius: 8px;
+  background: #1b232b;
+  color: #f3f5f7;
+  font: 600 13px/1.2 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  cursor: pointer;
+}
+.vb-btn:hover { background: #26313b; }
+.vb-btn--primary { border-color: #09b1ba; background: #09b1ba; color: #fff; }
+.vb-btn--primary:hover { background: #078d94; }
+.vb-btn--small { padding: 6px 10px; font-size: 12px; }
+
+/* Relist button placed inline with Vinted's own owner actions (observed: a
+ * vertical grid of 36px outlined buttons). Filled where theirs are outlined, so
+ * it reads as the one action that is not Vinted's. */
+.vb-inline {
+  display: block;
+  width: 100%;
+  height: 36px;
+  margin: 0;
+  padding: 0 16px;
+  border: 1px solid #09b1ba;
+  border-radius: 6px;
+  background: #09b1ba;
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 18px;
+  cursor: pointer;
+}
+.vb-inline:hover:not(:disabled) { background: #078d94; border-color: #078d94; }
+.vb-inline:disabled { opacity: 0.6; cursor: default; }
+
+/* Profile page: the Listra pill and its menu. */
+.vb-menu {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 99999;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-end;
+  gap: 8px;
+}
+.vb-menu .vb-fab { position: static; }
+.vb-menu__list {
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  padding: 6px;
+  border-radius: 12px;
+  background: #101418;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+.vb-menu__item {
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #f3f5f7;
+  font: 500 13px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  text-align: left;
+  cursor: pointer;
+}
+.vb-menu__item:hover:not(:disabled) { background: #1f2a33; }
+.vb-menu__item:disabled { color: #6f7d8a; cursor: default; }
+
+/* Hover panel shared by the pill and the item button. */
+.vb-panel {
+  position: fixed;
+  z-index: 100000;
+  width: 300px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #101418;
+  color: #f3f5f7;
+  font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+.vb-panel__row {
+  display: flex;
+  gap: 10px;
+  padding: 3px 0;
+}
+.vb-panel__label {
+  flex: 0 0 56px;
+  color: #9fb0bd;
+}
+.vb-panel__value { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.vb-panel__row--ok .vb-panel__value { color: #4ccf8e; }
+.vb-panel__row--err .vb-panel__value { color: #ff7b72; }
+.vb-panel__row--run .vb-panel__value { color: #17c0c9; }
+
+/* Confirm modal. */
+.vb-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+}
+.vb-modal__box {
+  width: min(440px, calc(100vw - 32px));
+  padding: 18px 20px;
+  border-radius: 14px;
+  background: #101418;
+  color: #f3f5f7;
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.vb-modal__title {
+  margin: 0 0 10px;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.vb-modal__body p { margin: 0 0 8px; color: #d8e0e7; }
+.vb-modal__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 14px;
+}

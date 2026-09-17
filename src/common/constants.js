@@ -127,6 +127,12 @@
     log: 'vb_log',
     settings: 'vb_settings',
     proxyTabId: 'vb_proxy_tab_id',
+    /** Last relist progress payload, so a reloaded Vinted tab can redraw it. */
+    relistProgress: 'vb_relist_progress',
+    /** A relist request handed to a manager tab that was just opened. */
+    pendingRelist: 'vb_pending_relist',
+    /** The Vinted tab that asked for the current relist; progress goes there. */
+    relistOriginTabId: 'vb_relist_origin_tab',
   };
 
   VB.constants = {

@@ -1,8 +1,8 @@
-/* Popup is a launcher, not a control panel: fixed 300x400 per spec. Follows the
- * operating system's light/dark preference like the manager page. */
+/* Popup is a launcher, not a control panel: fixed 300x400 per spec. Same theme
+ * tokens and data-theme rules as the manager page (see theme.js). */
 
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   --bg: #f4f6f8;
   --panel: #ffffff;
   --panel-2: #e6ebf0;
@@ -15,7 +15,8 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --bg: #0f1418;
     --panel: #171d23;
     --panel-2: #1f262e;
@@ -26,6 +27,19 @@
     --brand-dark: #0fa7b0;
     --brand-ink: #062225;
   }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f1418;
+  --panel: #171d23;
+  --panel-2: #1f262e;
+  --ink: #e7ecf1;
+  --ink-soft: #97a4b1;
+  --line: #2a333d;
+  --brand: #17c0c9;
+  --brand-dark: #0fa7b0;
+  --brand-ink: #062225;
 }
 
 body {
@@ -83,3 +97,25 @@ h1 { margin: 0 0 12px; font-size: 16px; }
 .btn--primary:hover { background: var(--brand-dark); }
 
 .hint { margin-top: 14px; color: var(--ink-soft); font-size: 12px; }
+
+.theme {
+  display: flex;
+  margin-top: 12px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+}
+.theme__opt {
+  flex: 1;
+  padding: 4px 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.theme__opt[aria-pressed="true"] { background: var(--brand); color: var(--brand-ink); }

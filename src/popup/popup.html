@@ -5,6 +5,7 @@
     <meta charset="utf-8" />
     <title>Listra</title>
     <link rel="stylesheet" href="popup.css" />
+    <script src="../common/theme.js"></script>
   </head>
   <body>
     <h1>Listra</h1>
@@ -27,6 +28,12 @@
       The manager runs in its own tab because picking a folder and writing to it needs
       a real page. Everything stays on this computer.
     </p>
+
+    <div class="theme" role="group" aria-label="Theme" data-el="theme">
+      <button type="button" class="theme__opt" data-theme-opt="system" aria-pressed="false">System</button>
+      <button type="button" class="theme__opt" data-theme-opt="light" aria-pressed="false">Light</button>
+      <button type="button" class="theme__opt" data-theme-opt="dark" aria-pressed="false">Dark</button>
+    </div>
 
     <script src="../common/constants.js"></script>
     <script src="../common/messages.js"></script>

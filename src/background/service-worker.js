@@ -148,16 +148,77 @@ importScripts(
     return false;
   }
 
-  /** Open the manager tab, or focus it if it is already open. */
-  async function openManagerTab() {
+  /**
+   * Open the manager tab, or reuse the open one.
+   *
+   * `active: true` (the default) brings it to the front, which is what a click on
+   * the toolbar or the Backup button wants. The in-page Relist actions pass
+   * `active: false` so the work happens in a background tab and the person stays
+   * on Vinted; the manager asks to be focused (NEED_ATTENTION) only when it needs
+   * a decision.
+   *
+   * @param {{active?: boolean}} [opts]
+   * @returns {Promise<{tabId: number, created: boolean}>}
+   */
+  async function openManagerTab(opts) {
+    const active = !opts || opts.active !== false;
     const existing = await chrome.tabs.query({ url: MANAGER_URL });
     if (existing.length) {
-      await chrome.tabs.update(existing[0].id, { active: true });
-      await chrome.windows.update(existing[0].windowId, { focused: true }).catch(() => {});
-      return existing[0].id;
+      if (active) {
+        await chrome.tabs.update(existing[0].id, { active: true });
+        await chrome.windows.update(existing[0].windowId, { focused: true }).catch(() => {});
+      }
+      return { tabId: existing[0].id, created: false };
     }
-    const tab = await chrome.tabs.create({ url: MANAGER_URL, active: true });
-    return tab.id;
+    const tab = await chrome.tabs.create({ url: MANAGER_URL, active });
+    return { tabId: tab.id, created: true };
+  }
+
+  /** Read one storage.local key, null when missing or unreadable. */
+  async function readLocal(key) {
+    try {
+      const got = await chrome.storage.local.get(key);
+      return got[key] == null ? null : got[key];
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * The backup and relist facts the hover panels show, per id, picked out of
+   * the manager's persisted queue. Ids the manager has never seen map to null.
+   */
+  async function itemStatus(ids) {
+    const state = await readLocal(STORAGE_KEYS.runState);
+    const queue = (state && state.queue) || [];
+    const progress = await readLocal(STORAGE_KEYS.relistProgress);
+    const out = {};
+    for (const raw of ids || []) {
+      const id = String(raw);
+      const e = queue.find((q) => q && q.id === id);
+      out[id] = e
+        ? {
+            status: e.status,
+            title: e.title,
+            backedUpAt: e.backedUpAt || null,
+            imageCount: e.imageCount,
+            relist: e.relist || null,
+          }
+        : null;
+    }
+    return { items: out, progress: progress || null };
+  }
+
+  /** Forward relist progress to the Vinted tab that asked; best effort. */
+  async function relayRelistProgress(progress) {
+    const tabId = await readLocal(STORAGE_KEYS.relistOriginTabId);
+    if (tabId == null) return false;
+    try {
+      await chrome.tabs.sendMessage(tabId, { type: MSG.RELIST_PROGRESS, progress });
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async function sendToManager(message) {
@@ -241,7 +302,62 @@ importScripts(
 
     switch (message.type) {
       case MSG.OPEN_MANAGER:
-        guarded(async () => VB.done(await openManagerTab()), sendResponse);
+        guarded(async () => VB.done((await openManagerTab()).tabId), sendResponse);
+        return true;
+
+      case MSG.RELIST_ITEMS: {
+        // Sent by the in-page Relist button or profile menu. The manager does the
+        // work in a background tab; progress comes back to the tab that asked.
+        const ids = Array.isArray(message.ids) ? message.ids.map(String) : [];
+        const context = message.context || {};
+        guarded(async () => {
+          if (!ids.length) return VB.fail(ERR.SHAPE, 'No listing ids to relist');
+          if (sender.tab && sender.tab.id != null) {
+            await rememberProxyTab(sender.tab.id);
+            await chrome.storage.local.set({ [STORAGE_KEYS.relistOriginTabId]: sender.tab.id }).catch(() => {});
+          }
+          const { tabId, created } = await openManagerTab({ active: false });
+          if (created) {
+            // A fresh manager boots asynchronously and picks this up itself.
+            await chrome.storage.local.set({ [STORAGE_KEYS.pendingRelist]: { ids, context } });
+            return VB.done({ tabId, queued: true });
+          }
+          try {
+            const res = await chrome.tabs.sendMessage(tabId, { type: MSG.RELIST_ITEMS, ids, context });
+            return res || VB.fail(ERR.HTTP, 'The manager did not answer');
+          } catch (err) {
+            return VB.fail(ERR.HTTP, 'Could not reach the manager: ' + String(err));
+          }
+        }, sendResponse);
+        return true;
+      }
+
+      case MSG.RELIST_RETRY:
+        guarded(async () => {
+          const { tabId } = await openManagerTab({ active: false });
+          try {
+            const res = await chrome.tabs.sendMessage(tabId, { type: MSG.RELIST_RETRY });
+            return res || VB.fail(ERR.HTTP, 'The manager did not answer');
+          } catch (err) {
+            return VB.fail(ERR.HTTP, 'Could not reach the manager: ' + String(err));
+          }
+        }, sendResponse);
+        return true;
+
+      case MSG.GET_ITEM_STATUS:
+        guarded(async () => VB.done(await itemStatus(message.ids)), sendResponse);
+        return true;
+
+      case MSG.NEED_ATTENTION:
+        guarded(async () => {
+          VB.log.info(SCOPE, 'Manager asks for attention: ' + (message.reason || 'unspecified'));
+          await openManagerTab({ active: true });
+          return VB.done(true);
+        }, sendResponse);
+        return true;
+
+      case MSG.RELIST_PROGRESS:
+        guarded(async () => VB.done(await relayRelistProgress(message.progress)), sendResponse);
         return true;
 
       case MSG.START_BACKUP: {
@@ -251,7 +367,7 @@ importScripts(
         guarded(async () => {
           if (sender.tab && sender.tab.id != null) await rememberProxyTab(sender.tab.id);
           await chrome.storage.local.set({ vb_pending_context: context });
-          const tabId = await openManagerTab();
+          const { tabId } = await openManagerTab();
           // The manager may already be open and idle; nudge it either way.
           await sendToManager({ type: MSG.START_BACKUP, context });
           return VB.done(tabId);

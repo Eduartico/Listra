@@ -29,6 +29,8 @@ const MODULES = [
   'src/common/page-data.js',
   'src/common/normalize.js',
   'src/common/relist-body.js',
+  'src/common/relist-plan.js',
+  'src/common/theme.js',
   'src/content/dom-extractor.js',
   'src/manager/storage-idb.js',
   'src/manager/storage-fsa.js',
@@ -458,6 +460,55 @@ section('Relist: human-check detection');
   equal(parseChallenge('{"code":106,"message":"Acesso negado"}'), null, 'an ordinary API error is not a challenge');
   equal(parseChallenge('<html>La page nexiste pas</html>'), null, 'an ordinary 404 page is not a challenge');
   equal(parseChallenge(''), null, 'empty body is not a challenge');
+}
+
+section('Theme resolution');
+{
+  const { resolve } = VB.theme;
+  equal(resolve('system', true), 'dark', 'system follows a dark OS');
+  equal(resolve('system', false), 'light', 'system follows a light OS');
+  equal(resolve('dark', false), 'dark', 'dark wins over a light OS');
+  equal(resolve('light', true), 'light', 'light wins over a dark OS');
+  equal(resolve(undefined, true), 'dark', 'missing preference means system');
+  equal(resolve('purple', false), 'light', 'unknown preference means system');
+}
+
+section('Item page URL');
+{
+  const re = VB.SELECTORS.item.itemInUrl;
+  equal((re.exec('/items/123-some-slug') || [])[1], '123', 'id with a slug');
+  equal((re.exec('/items/123') || [])[1], '123', 'bare id');
+  equal((re.exec('/items/123/') || [])[1], '123', 'trailing slash');
+  ok(re.exec('/items/') === null, 'rejects a missing id');
+  ok(re.exec('/items/abc') === null, 'rejects a non-numeric id');
+  ok(re.exec('/member/123') === null, 'rejects a profile path');
+}
+
+section('Relist plan');
+{
+  const { activeIds, entriesFor } = VB.relistPlan;
+  const records = [
+    { id: 1, is_closed: false },
+    { id: 2, is_closed: true },
+    { id: 3 },
+    { id: 4, is_closed: false, title: 'x' },
+  ];
+  equal(activeIds(records), ['1', '4'], 'only records explicitly not closed are active');
+  equal(activeIds([]), [], 'empty wardrobe');
+
+  const queue = [
+    { id: '10', status: 'completed', title: 'Ten', folder: 'Ten', attempts: 1, error: null, imageCount: 2, bytes: 5, price: '1', currency: 'EUR' },
+  ];
+  const { entries, added } = entriesFor(queue, ['10', '11', '10']);
+  equal(entries.map((e) => e.id), ['10', '11'], 'existing entry reused, duplicates dropped, order kept');
+  equal(added.map((e) => e.id), ['11'], 'only the unknown id is new');
+  equal(
+    Object.keys(added[0]).sort(),
+    ['attempts', 'bytes', 'currency', 'error', 'folder', 'id', 'imageCount', 'price', 'status', 'title'].sort(),
+    'new entry has the same fields as a backup entry'
+  );
+  equal(added[0].status, 'pending', 'new entry starts pending');
+  ok(entries[0] === queue[0], 'existing entry is the same object');
 }
 
 section('ZIP writer');

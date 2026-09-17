@@ -6,13 +6,20 @@
     <meta name="color-scheme" content="light dark" />
     <title>Listra</title>
     <link rel="stylesheet" href="manager.css" />
+    <!-- Before the stylesheet paints: sets data-theme from the stored preference. -->
+    <script src="../common/theme.js"></script>
   </head>
   <body>
     <header class="head">
       <img class="head__logo" src="../../icons/icon48.png" alt="" width="36" height="36" />
-      <div>
+      <div class="head__text">
         <h1>Listra</h1>
         <p class="sub" data-el="context">No Vinted profile connected yet.</p>
+      </div>
+      <div class="theme" role="group" aria-label="Theme" data-el="theme">
+        <button type="button" class="theme__opt" data-theme-opt="system" aria-pressed="false">System</button>
+        <button type="button" class="theme__opt" data-theme-opt="light" aria-pressed="false">Light</button>
+        <button type="button" class="theme__opt" data-theme-opt="dark" aria-pressed="false">Dark</button>
       </div>
     </header>
 
@@ -172,6 +179,7 @@
     <script src="../common/page-data.js"></script>
     <script src="../common/normalize.js"></script>
     <script src="../common/relist-body.js"></script>
+    <script src="../common/relist-plan.js"></script>
     <script src="storage-fsa.js"></script>
     <script src="storage-idb.js"></script>
     <script src="storage.js"></script>

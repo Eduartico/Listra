@@ -22,6 +22,17 @@
     CANCEL_BACKUP: 'CANCEL_BACKUP',
     /** Read the persisted run state. Answered from chrome.storage.local. */
     GET_STATE: 'GET_STATE',
+    /**
+     * In-page Relist button or menu asking the manager to relist these ids. The
+     * worker opens the manager in the background and forwards this to it.
+     */
+    RELIST_ITEMS: 'RELIST_ITEMS',
+    /** Retry the stopped relist batch (after a human check done on the page). */
+    RELIST_RETRY: 'RELIST_RETRY',
+    /** Per-id backup and relist facts for hover panels; answered from storage. */
+    GET_ITEM_STATUS: 'GET_ITEM_STATUS',
+    /** Manager asking to be brought to the front because it needs the person. */
+    NEED_ATTENTION: 'NEED_ATTENTION',
 
     // --- proxied to a Vinted tab's content script ----------------------------
     /** Readiness probe: is a content script listening in this tab yet? */
@@ -52,6 +63,8 @@
     STATE_CHANGED: 'STATE_CHANGED',
     /** Drive the on-page progress overlay in the Vinted tab. */
     OVERLAY_UPDATE: 'OVERLAY_UPDATE',
+    /** Relist batch progress, manager -> worker -> the Vinted tab that asked. */
+    RELIST_PROGRESS: 'RELIST_PROGRESS',
   };
 
   /** Error codes we branch on, rather than matching error message text. */
@@ -71,6 +84,8 @@
     HUMAN_CHECK: 'HUMAN_CHECK',
     /** HTTP 429 from Vinted. */
     RATE_LIMITED: 'RATE_LIMITED',
+    /** The manager is already backing up or relisting. */
+    BUSY: 'BUSY',
   };
 
   /**

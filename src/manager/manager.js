@@ -30,6 +30,8 @@
    * @property {number|null} bytes
    * @property {number|null} price
    * @property {string|null} currency
+   * @property {string} [backedUpAt] ISO time of the last successful backup
+   * @property {object} [relist] relist.js's per-entry state
    */
 
   /** @type {{status: string, context: object|null, queue: QueueEntry[], startedAt: number|null, finishedAt: number|null, durations: number[], limit: number|null}} */
@@ -330,6 +332,8 @@
 
       if (res.ok) {
         state.durations.push(Date.now() - started);
+        // Shown by the in-page hover panels ("Backed up 16 Sep, 20:35").
+        entry.backedUpAt = new Date().toISOString();
         return res;
       }
 
@@ -551,22 +555,27 @@
       el[node.dataset.el] = node;
     }
 
+    VB.theme.bindControl(el.theme);
+
     el.chooseFolder.addEventListener('click', async () => {
       const res = await storage.chooseFolder();
       if (!res.ok && res.code !== ERR.CANCELLED) setNotice(res.message, 'error');
       renderStorage();
+      startHeldRelist();
     });
 
     el.reconnectFolder.addEventListener('click', async () => {
       const res = await storage.reconnectFolder();
       if (!res.ok) setNotice(res.message, 'error');
       renderStorage();
+      startHeldRelist();
     });
 
     el.useBrowserStorage.addEventListener('click', async () => {
       const res = await storage.useBrowserStorage();
       if (!res.ok) setNotice(res.message, 'error');
       renderStorage();
+      startHeldRelist();
     });
 
     el.start.addEventListener('click', () => {
@@ -779,8 +788,58 @@
   // Boot
   // ---------------------------------------------------------------------------
 
+  /**
+   * A relist asked for from a Vinted page while no destination was ready. Kept
+   * until the person picks one here (that needs a gesture on this page), then
+   * started without asking again.
+   * @type {{ids: string[], context: object}|null}
+   */
+  let heldRelist = null;
+
+  function startHeldRelist() {
+    if (!heldRelist || !storage.isReady() || running) return;
+    const req = heldRelist;
+    heldRelist = null;
+    acceptRelist(req.ids, req.context);
+  }
+
+  /**
+   * Handle a RELIST_ITEMS request from a Vinted page. The page already asked
+   * for confirmation, so none is repeated here. Returns a result object the
+   * page can show.
+   */
+  function acceptRelist(ids, context) {
+    if (!VB.relist) return VB.fail(ERR.HTTP, 'Relisting is not loaded');
+    if (running) return VB.fail(ERR.BUSY, 'A backup is running; try again when it finishes.');
+    if (VB.relist.isBusy()) return VB.fail(ERR.BUSY, 'A relist is already running.');
+    // The page's context fills in when none is set (fresh tab); an existing
+    // one is kept, since it may carry the username the manifest records.
+    if (context && context.domain && !(state.context && state.context.domain)) state.context = context;
+    if (!storage.isReady()) {
+      heldRelist = { ids, context };
+      setNotice('Choose where the backup should go; the relist starts right after.', 'warn');
+      chrome.runtime.sendMessage({ type: MSG.NEED_ATTENTION, reason: 'storage' }).catch(() => {});
+      render();
+      return VB.done({ held: true });
+    }
+    const { entries, added } = VB.relistPlan.entriesFor(state.queue, ids);
+    if (!entries.length) return VB.fail(ERR.SHAPE, 'No listing ids to relist');
+    if (added.length) state.queue.unshift(...added);
+    render();
+    VB.relist.relistFromPage(entries.map((e) => e.id));
+    return VB.done({ started: entries.length, added: added.length });
+  }
+
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (!message || typeof message.type !== 'string') return false;
+    if (message.type === MSG.RELIST_ITEMS) {
+      sendResponse(acceptRelist(Array.isArray(message.ids) ? message.ids : [], message.context));
+      return false;
+    }
+    if (message.type === MSG.RELIST_RETRY) {
+      sendResponse(VB.relist ? VB.relist.retry() : VB.fail(ERR.HTTP, 'Relisting is not loaded'));
+      return false;
+    }
     if (message.type === MSG.START_BACKUP) {
       // Sent when the on-page button is used. Only auto-starts when a destination
       // is already set; otherwise the user still has to pick one here, since the
@@ -877,6 +936,18 @@
         'A previous run was interrupted. Press Start to continue where it stopped.',
         'warn'
       );
+    }
+
+    // A relist request handed over by a Vinted page that opened this tab.
+    const pendingRelist = await chrome.storage.local.get(STORAGE_KEYS.pendingRelist).catch(() => ({}));
+    const req = pendingRelist && pendingRelist[STORAGE_KEYS.pendingRelist];
+    if (req && Array.isArray(req.ids) && req.ids.length) {
+      await chrome.storage.local.remove(STORAGE_KEYS.pendingRelist).catch(() => {});
+      const res = acceptRelist(req.ids.map(String), req.context);
+      if (!res.ok) {
+        setNotice(res.message, 'warn');
+        VB.relist.publishProgress({ status: 'failed', error: res.message, ids: req.ids.map(String) });
+      }
     }
   })();
 })();
