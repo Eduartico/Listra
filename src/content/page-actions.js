@@ -199,8 +199,15 @@
     return {};
   }
 
+  /** A running report older than this is a manager that died mid-run. */
+  const STALE_RUN_MS = 15 * 60 * 1000;
+
   function relistRunning() {
-    return !!(relistProgress && relistProgress.status === 'running');
+    return !!(
+      relistProgress &&
+      relistProgress.status === 'running' &&
+      Date.now() - (relistProgress.at || 0) < STALE_RUN_MS
+    );
   }
 
   function relistInvolves(id) {
@@ -382,17 +389,6 @@
     return m ? m[1] : null;
   }
 
-  /**
-   * Whether the page says its item is closed. The full item DTO in the flight
-   * payload carries `is_closed`; null when it cannot be found, in which case the
-   * manager decides from the backup and the wording hedges.
-   */
-  function pageSaysClosed(flight) {
-    if (!flight) return null;
-    const m = /"is_closed":(true|false)/.exec(flight);
-    return m ? m[1] === 'true' : null;
-  }
-
   /** The container holding Vinted's owner buttons, or null. */
   function findOwnerActionsAnchor() {
     for (const sel of VB.SELECTORS.item.ownerActionButtons) {
@@ -464,7 +460,6 @@
       VB.log.info(SCOPE, 'Item page: someone else’s item, no button');
       return;
     }
-    const closed = pageSaysClosed(flight);
     const title = sidebar && sidebar.title ? String(sidebar.title) : 'this listing';
     // The manager refills its wardrobe cache from `profileUserId`; on an item
     // page that is the signed-in seller.
@@ -475,6 +470,12 @@
       .waitForSelector(VB.SELECTORS.item.ownerActionButtons.join(', '), 4000)
       .then(() => findOwnerActionsAnchor())
       .catch(() => null);
+    // Vinted shows Bump / Mark as sold only on a live listing of one's own. The
+    // page payload carries no reliable closed flag (the captured flight has
+    // `is_closed` only on other items), so: buttons present means live, absent
+    // means unknown and the wording hedges. The manager decides from the
+    // backup's wardrobe record what actually needs deleting.
+    const closed = anchor ? false : null;
 
     let button;
     let setLabel;

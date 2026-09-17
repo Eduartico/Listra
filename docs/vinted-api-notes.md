@@ -117,7 +117,10 @@ Sold listings have no `item_upload` record, so their ids come only from the page
 
 `POST /api/v2/items/{id}/delete` — **empty body, no content-type** (200). The same
 call with `{}` and `content-type: application/json` answered 403 access_denied.
-Closet counts drop immediately.
+Closet counts drop immediately. Deleting an id that is already gone answers 404
+`not_found`; the relist treats that as "nothing to delete" and goes on to create.
+A listing Vinted itself has cancelled (no Edit/Bump buttons on its page) answers
+403 `access_denied` to delete, so it cannot be relisted from the button.
 
 **Relist ordering:** delete the original before creating the replacement. Vinted
 rejects a create whose photos match a live listing, so create-then-delete gets both

@@ -59,9 +59,26 @@
       ...(extra || {}),
     };
     chrome.storage.local.set({ [STORAGE_KEYS.relistProgress]: p }).catch(() => {});
-    chrome.runtime.sendMessage({ type: MSG.RELIST_PROGRESS, progress: p }).catch(() => {});
-    return p;
+    // Resolves to whether the Vinted tab that asked received it.
+    return chrome.runtime
+      .sendMessage({ type: MSG.RELIST_PROGRESS, progress: p })
+      .then((res) => !!(res && res.ok && res.value), () => false);
   }
+
+  // A report left at "running" by a manager that was closed mid-run would keep
+  // the on-page buttons disabled; mark it interrupted now that this page is up.
+  chrome.storage.local.get(STORAGE_KEYS.relistProgress).then((got) => {
+    const p = got && got[STORAGE_KEYS.relistProgress];
+    if (p && p.status === 'running' && !busy) {
+      publishProgress({
+        ...p,
+        status: 'failed',
+        step: null,
+        error: 'Listra was closed before the relist finished. Check the listing on Vinted, then press Relist again if needed.',
+        summary: p.completed + ' of ' + p.total + ' relisted before the interruption.',
+      });
+    }
+  }).catch(() => {});
 
   async function blobToBase64(blob) {
     const bytes = new Uint8Array(await blob.arrayBuffer());
@@ -344,7 +361,7 @@
       const lastError = batch.current && batch.current.relist && batch.current.relist.status === 'failed'
         ? batch.current.relist.error
         : null;
-      const delivered = publishProgress({
+      const delivered = await publishProgress({
         status: stopCode === ERR.HUMAN_CHECK ? 'human-check'
           : stopCode === ERR.RATE_LIMITED ? 'rate-limited'
           : cancelRequested ? 'cancelled'
@@ -354,7 +371,11 @@
         error: lastError,
         summary,
       });
-      void delivered;
+      // Stopped waiting for a person, and the Vinted tab that asked is gone:
+      // this page is the only place left to continue from, so bring it up.
+      if (stopCode && stopCode !== ERR.CANCELLED && !delivered) {
+        chrome.runtime.sendMessage({ type: MSG.NEED_ATTENTION, reason: stopCode }).catch(() => {});
+      }
       batch = null;
       M.render();
     }
